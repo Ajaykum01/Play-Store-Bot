@@ -3,6 +3,8 @@ import play_scraper
 from pyrogram import Client, filters
 from pyrogram.types import *
 from pyrogram.errors import UserNotParticipant
+import threading
+from http.server import SimpleHTTPRequestHandler, HTTPServer
 
 # Initialize the bot client
 Bot = Client(
@@ -122,6 +124,13 @@ async def callback_query_handler(client, callback_query):
             await callback_query.message.edit("You are now verified! Send me the app name.")
         else:
             await callback_query.answer("You're still not a member!", show_alert=True)
+
+# Start a dummy server for Koyeb health check (port 8080)
+def run_server():
+    server = HTTPServer(("0.0.0.0", 8080), SimpleHTTPRequestHandler)
+    server.serve_forever()
+
+threading.Thread(target=run_server).start()
 
 # Start the bot
 Bot.run()
