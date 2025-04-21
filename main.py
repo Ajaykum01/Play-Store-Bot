@@ -3,15 +3,8 @@ import play_scraper
 from pyrogram import Client, filters
 from pyrogram.types import *
 from pyrogram.errors import UserNotParticipant
-from flask import Flask
 import threading
-
-# Initialize Flask app for health check
-app = Flask(__name__)
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    return 'OK', 200
+from http.server import SimpleHTTPRequestHandler, HTTPServer
 
 # Initialize the bot client
 Bot = Client(
@@ -21,40 +14,34 @@ Bot = Client(
     api_hash=os.environ["API_HASH"]
 )
 
-# List of channels the user must join (replace with your actual channel usernames)
-FORCE_SUB_CHANNELS = [
-    "YourChannelUsername1",  # Replace with actual usernames
-    "YourChannelUsername2",
-    "YourChannelUsername3",
-    "YourChannelUsername4"
-]
+# Multiple force-subscribe channels
+FORCE_SUB_CHANNELS = ["freefirepannelfree", "+27yPnr6aQYo2NDE1", "tamilmovierequestda", "+udIcxtizerAwOTRl"]  # Replace with your channel usernames
 
 # Dictionary to store user-specific links
 user_links = {}
 
 # Function to check if the user is a member of all required channels
 async def check_force_sub(client, message):
-    not_joined_channels = []
-    
-    # Loop through each channel to check if the user is a member
+    not_joined = []
     for channel in FORCE_SUB_CHANNELS:
         try:
             user = await client.get_chat_member(channel, message.from_user.id)
             if user.status in ["kicked", "banned"]:
-                await message.reply(f"You are banned from using this bot in {channel}.")
+                await message.reply(f"You are banned from using this bot in @{channel}.")
                 return False
         except UserNotParticipant:
-            not_joined_channels.append(channel)
+            not_joined.append(channel)
+        except Exception:
+            not_joined.append(channel)
 
-    if not_joined_channels:
-        # Create an invite link for each channel the user is not a member of
-        invite_links = "\n".join([f"[Join {channel}](https://t.me/{channel})" for channel in not_joined_channels])
+    if not_joined:
+        buttons = [[InlineKeyboardButton(f"Join @{ch}", url=f"https://t.me/{ch}")] for ch in not_joined]
+        buttons.append([InlineKeyboardButton("I've Joined", callback_data="checksub")])
+
         await message.reply(
-            f"To use this bot, you must join the following channels first:\n{invite_links}\n\nPlease join them to continue.",
-            disable_web_page_preview=True,
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("I've Joined", callback_data="checksub")]]
-            )
+            "**To use this bot, you must join all the required channels first.**",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            disable_web_page_preview=True
         )
         return False
     return True
@@ -65,7 +52,7 @@ async def setlink(client, message):
     if not await check_force_sub(client, message):
         return
     if len(message.command) < 2:
-        await message.reply("Usage: `/setlink <your_modijiurl.com_link>`", parse_mode="Markdown")
+        await message.reply("Usage: `/setlink <your_modijiurl.com_link>`", parse_mode="MarkdownV2")
         return
     user_links[message.from_user.id] = message.command[1]
     await message.reply("Your custom shortened link has been saved!")
@@ -79,7 +66,7 @@ async def gen(client, message):
     if user_id in user_links:
         await message.reply(f"Here is your shortened link: {user_links[user_id]}")
     else:
-        await message.reply("No link found! Use `/setlink <your_modijiurl.com_link>` to set one.", parse_mode="Markdown")
+        await message.reply("No link found! Use `/setlink <your_modijiurl.com_link>` to set one.", parse_mode="MarkdownV2")
 
 # Handler for private messages
 @Bot.on_message(filters.private & filters.all)
@@ -138,14 +125,12 @@ async def callback_query_handler(client, callback_query):
         else:
             await callback_query.answer("You're still not a member!", show_alert=True)
 
-# Run the bot and health check server in separate threads
-def run_flask():
-    app.run(host="0.0.0.0", port=8080)
+# Start a dummy server for Koyeb health check (port 8080)
+def run_server():
+    server = HTTPServer(("0.0.0.0", 8080), SimpleHTTPRequestHandler)
+    server.serve_forever()
 
-if __name__ == "__main__":
-    # Start Flask health check route in a separate thread
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.start()
+threading.Thread(target=run_server).start()
 
-    # Run the Pyrogram bot
-    Bot.run()
+# Start the bot
+Bot.run()
