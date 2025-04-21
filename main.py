@@ -14,34 +14,34 @@ Bot = Client(
     api_hash=os.environ["API_HASH"]
 )
 
-# Multiple force-subscribe channels
-FORCE_SUB_CHANNELS = ["freefirepannelfree", "+27yPnr6aQYo2NDE1", "tamilmovierequestda", "+udIcxtizerAwOTRl"]  # Replace with your channel usernames
+# Specify the channel username (without @)
+FORCE_SUB_CHANNEL = "freefirepannelfree"  # Replace with your channel's username
 
 # Dictionary to store user-specific links
 user_links = {}
 
-# Function to check if the user is a member of all required channels
+# Function to check if the user is a member of the required channel
 async def check_force_sub(client, message):
-    not_joined = []
-    for channel in FORCE_SUB_CHANNELS:
+    try:
+        user = await client.get_chat_member(FORCE_SUB_CHANNEL, message.from_user.id)
+        if user.status in ["kicked", "banned"]:
+            await message.reply("You are banned from using this bot.")
+            return False
+    except UserNotParticipant:
         try:
-            user = await client.get_chat_member(channel, message.from_user.id)
-            if user.status in ["kicked", "banned"]:
-                await message.reply(f"You are banned from using this bot in @{channel}.")
-                return False
-        except UserNotParticipant:
-            not_joined.append(channel)
-        except Exception:
-            not_joined.append(channel)
-
-    if not_joined:
-        buttons = [[InlineKeyboardButton(f"Join @{ch}", url=f"https://t.me/{ch}")] for ch in not_joined]
-        buttons.append([InlineKeyboardButton("I've Joined", callback_data="checksub")])
+            invite_link = await client.create_chat_invite_link(FORCE_SUB_CHANNEL)
+        except:
+            invite_link = f"https://t.me/{FORCE_SUB_CHANNEL}"
 
         await message.reply(
-            "**To use this bot, you must join all the required channels first.**",
-            reply_markup=InlineKeyboardMarkup(buttons),
-            disable_web_page_preview=True
+            f"**To use this bot, you must join [this channel](https://t.me/{FORCE_SUB_CHANNEL}) first.**",
+            disable_web_page_preview=True,
+            reply_markup=InlineKeyboardMarkup(
+                [[
+                    InlineKeyboardButton("Join Channel", url=invite_link.invite_link if hasattr(invite_link, "invite_link") else invite_link),
+                    InlineKeyboardButton("I've Joined", callback_data="checksub")
+                ]]
+            )
         )
         return False
     return True
@@ -52,7 +52,7 @@ async def setlink(client, message):
     if not await check_force_sub(client, message):
         return
     if len(message.command) < 2:
-        await message.reply("Usage: `/setlink <your_modijiurl.com_link>`", parse_mode="MarkdownV2")
+        await message.reply("Usage: `/setlink <your_modijiurl.com_link>`", parse_mode="Markdown")
         return
     user_links[message.from_user.id] = message.command[1]
     await message.reply("Your custom shortened link has been saved!")
@@ -66,7 +66,7 @@ async def gen(client, message):
     if user_id in user_links:
         await message.reply(f"Here is your shortened link: {user_links[user_id]}")
     else:
-        await message.reply("No link found! Use `/setlink <your_modijiurl.com_link>` to set one.", parse_mode="MarkdownV2")
+        await message.reply("No link found! Use `/setlink <your_modijiurl.com_link>` to set one.", parse_mode="Markdown")
 
 # Handler for private messages
 @Bot.on_message(filters.private & filters.all)
