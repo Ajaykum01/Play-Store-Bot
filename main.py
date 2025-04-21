@@ -15,7 +15,7 @@ Bot = Client(
 )
 
 # Specify the channel username (without @)
-FORCE_SUB_CHANNEL = "YourChannelUsername"  # Replace with your channel's username
+FORCE_SUB_CHANNEL = "freefirepannelfree"  # Replace with your channel's username
 
 # Dictionary to store user-specific links
 user_links = {}
