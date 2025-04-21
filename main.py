@@ -3,6 +3,15 @@ import play_scraper
 from pyrogram import Client, filters
 from pyrogram.types import *
 from pyrogram.errors import UserNotParticipant
+from flask import Flask
+import threading
+
+# Initialize Flask app for health check
+app = Flask(__name__)
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return 'OK', 200
 
 # Initialize the bot client
 Bot = Client(
@@ -14,10 +23,10 @@ Bot = Client(
 
 # List of channels the user must join (replace with your actual channel usernames)
 FORCE_SUB_CHANNELS = [
-    "+udpCXZgqUgY1MTRl",  # Replace with actual usernames
-    "tamilmovierequestda",
-    "freefirepannelfree",
-    "+27yPnr6aQYo2NDE1"
+    "YourChannelUsername1",  # Replace with actual usernames
+    "YourChannelUsername2",
+    "YourChannelUsername3",
+    "YourChannelUsername4"
 ]
 
 # Dictionary to store user-specific links
@@ -129,5 +138,14 @@ async def callback_query_handler(client, callback_query):
         else:
             await callback_query.answer("You're still not a member!", show_alert=True)
 
-# Start the bot
-Bot.run()
+# Run the bot and health check server in separate threads
+def run_flask():
+    app.run(host="0.0.0.0", port=8080)
+
+if __name__ == "__main__":
+    # Start Flask health check route in a separate thread
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+
+    # Run the Pyrogram bot
+    Bot.run()
