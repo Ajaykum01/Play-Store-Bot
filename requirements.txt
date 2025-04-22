@@ -2,3 +2,4 @@ pyrogram
 tgcrypto
 play-scraper
 pymongo
+python-dotenv
