@@ -3,10 +3,12 @@ import play_scraper
 from pyrogram import Client, filters
 from pyrogram.types import *
 from pyrogram.errors import UserNotParticipant, FloodWait
+from pymongo import MongoClient
 import threading
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 import asyncio
 
+# Telegram Bot Configuration
 Bot = Client(
     "Play-Store-Bot",
     bot_token=os.environ["BOT_TOKEN"],
@@ -14,7 +16,7 @@ Bot = Client(
     api_hash=os.environ["API_HASH"]
 )
 
-OWNER_ID = int(os.environ.get("OWNER_ID", 2117119246))  # Replace 123456789 with your Telegram ID
+OWNER_ID = int(os.environ.get("OWNER_ID", 123456789))  # Replace with your Telegram ID
 
 FORCE_SUB_CHANNELS = [
     {"link": "https://t.me/+27yPnr6aQYo2NDE1", "chat_id": -1002211067746},
@@ -23,7 +25,12 @@ FORCE_SUB_CHANNELS = [
     {"link": "https://t.me/+A0LsNrMLyX8yOGM1", "chat_id": -1002096500701},
 ]
 
-user_links = {}
+# MongoDB Configuration
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/")
+mongo_client = MongoClient(MONGO_URI)
+db = mongo_client["PlayStoreBot"]
+links_collection = db["user_links"]
+
 broadcasted_users = set()
 
 async def check_all_subs(client, message):
@@ -54,19 +61,32 @@ async def setlink(client, message):
 
     if not await check_all_subs(client, message):
         return
+
     if len(message.command) < 2:
         await message.reply("Usage: `/setlink <your_modijiurl.com_link>`", parse_mode="Markdown")
         return
-    user_links[message.from_user.id] = message.command[1]
+
+    link = message.command[1]
+    user_id = message.from_user.id
+
+    links_collection.update_one(
+        {"user_id": user_id},
+        {"$set": {"link": link}},
+        upsert=True
+    )
+
     await message.reply("Your custom shortened link has been saved!")
 
 @Bot.on_message(filters.command("gen") & filters.private)
 async def gen(client, message):
     if not await check_all_subs(client, message):
         return
+
     user_id = message.from_user.id
-    if user_id in user_links:
-        await message.reply(f"Here is your shortened link: {user_links[user_id]}")
+    data = links_collection.find_one({"user_id": user_id})
+
+    if data and "link" in data:
+        await message.reply(f"Here is your shortened link: {data['link']}")
     else:
         await message.reply("No link found! Use `/setlink <your_modijiurl.com_link>` to set one.", parse_mode="Markdown")
 
@@ -151,10 +171,12 @@ async def callback_query_handler(client, callback_query):
         else:
             await callback_query.answer("You're still not subscribed to all channels.", show_alert=True)
 
+# Run HTTP server (for Heroku uptime or similar)
 def run_server():
     server = HTTPServer(("0.0.0.0", 8080), SimpleHTTPRequestHandler)
     server.serve_forever()
 
 threading.Thread(target=run_server).start()
 
+# Start Bot
 Bot.run()
