@@ -52,7 +52,7 @@ async def start(bot, message):
 async def verify_channels(bot, query):
     await query.message.delete()
     await query.message.reply(
-        "📗 Welcome to free Google Play Redeem Code Bot\n😍 Click On Generate Code 👾",
+        "📗 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 👾",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
@@ -61,13 +61,24 @@ async def generate_code(bot, query):
     config = config_collection.find_one({"_id": "config"}) or {}
     url = config.get("redeem_url", "https://modijiurl.com")
     hash_code = generate_random_hash()
-    await query.message.edit(
-        "Your Redeem Code Generated successfully✅\n\n"
-        f"hash: {hash_code}\n"
-        f"Code :  {url}"
-        ,
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
+    image_url = "https://envs.sh/CCn.jpg"
+
+    caption = (
+        "**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
+        f"`hash:` `{hash_code}`\n"
+        f"**Code :** `{url}`"
     )
+
+    buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
+
+    await bot.send_photo(
+        chat_id=query.message.chat.id,
+        photo=image_url,
+        caption=caption,
+        reply_markup=buttons
+    )
+
+    await query.answer()
 
 @Bot.on_message(filters.command("setlink") & filters.private)
 async def set_link(bot, message):
@@ -95,7 +106,7 @@ async def broadcast(bot, message):
             continue
     await message.reply(f"Broadcast sent to {count} users.")
 
-# Health check server to prevent sleep
+# Health check server to prevent Koyeb sleep
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -107,7 +118,7 @@ def run_server():
     server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
     server.serve_forever()
 
-# Start the HTTP server in a background thread
+# Start health check server in background
 threading.Thread(target=run_server).start()
 
 # Run the bot
