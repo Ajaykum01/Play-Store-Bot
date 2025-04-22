@@ -74,11 +74,11 @@ async def filter_all(bot, update):
     if not await check_force_sub(bot, update):
         return
 
-    text = "Search play store apps using below buttons.\n\nMade by @FayasNoushad"
+    text = "♥️HELLO FRIEND PLEASE JOIN BELOW CHANNEL🥰 JOIN MY CHANNEL 👇👇👇"
     reply_markup = InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton(text="Search here", switch_inline_query_current_chat="")],
-            [InlineKeyboardButton(text="Search in another chat", switch_inline_query="")]
+            [InlineKeyboardButton(text="CHANNEL 1", url=https://t.me/+_HZk2Yc4ug8xNTc9"")],
+            [InlineKeyboardButton(text="CHANNEL 2", url=https://t.me/+27yPnr6aQYo2NDE1"")]
         ]
     )
     await update.reply_text(
