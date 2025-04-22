@@ -14,7 +14,7 @@ Bot = Client(
     api_hash=os.environ["API_HASH"]
 )
 
-OWNER_ID = int(os.environ.get("OWNER_ID", 123456789))  # Replace 123456789 with your Telegram ID
+OWNER_ID = int(os.environ.get("OWNER_ID", 2117119246))  # Replace 123456789 with your Telegram ID
 
 FORCE_SUB_CHANNELS = [
     {"link": "https://t.me/+27yPnr6aQYo2NDE1", "chat_id": -1002211067746},
