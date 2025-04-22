@@ -2,7 +2,7 @@ import os
 import threading
 import random
 import string
-from http.server import SimpleHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
 from pyrogram.types import *
 from pymongo import MongoClient
@@ -95,11 +95,20 @@ async def broadcast(bot, message):
             continue
     await message.reply(f"Broadcast sent to {count} users.")
 
-# Run HTTP server (for Heroku uptime or similar)
+# Health check server to prevent sleep
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"Bot is Alive!")
+
 def run_server():
-    server = HTTPServer(("0.0.0.0", 8080), SimpleHTTPRequestHandler)
+    server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
     server.serve_forever()
 
+# Start the HTTP server in a background thread
 threading.Thread(target=run_server).start()
 
+# Run the bot
 Bot.run()
