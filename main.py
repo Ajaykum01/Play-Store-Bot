@@ -18,11 +18,12 @@ Bot = Client(
 
 OWNER_ID = int(os.environ.get("OWNER_ID", 2117119246))  # Replace with your Telegram ID
 
+# Channels to force join - use usernames, not chat_ids
 FORCE_SUB_CHANNELS = [
-    {"link": "https://t.me/+27yPnr6aQYo2NDE1", "chat_id": -1002211067746},
-    {"link": "https://t.me/+udIcxtizerAwOTRl", "chat_id": -1002010768345},
-    {"link": "https://t.me/+np4is6JZyyY3MTg1", "chat_id": -1002168359986},
-    {"link": "https://t.me/+A0LsNrMLyX8yOGM1", "chat_id": -1002096500701},
+    {"link": "https://t.me/+A0LsNrMLyX8yOGM1", "username": "+A0LsNrMLyX8yOGM1"},
+    {"link": "https://t.me/+np4is6JZyyY3MTg1", "username": "+np4is6JZyyY3MTg1"},
+    {"link": "https://t.me/+udIcxtizerAwOTRl", "username": "+udIcxtizerAwOTRl"},
+    {"link": "https://t.me/+27yPnr6aQYo2NDE1", "username": "+27yPnr6aQYo2NDE1"},
 ]
 
 # MongoDB Configuration
@@ -33,15 +34,19 @@ links_collection = db["user_links"]
 
 broadcasted_users = set()
 
+# Updated check_all_subs using channel usernames
 async def check_all_subs(client, message):
     not_joined = []
     for channel in FORCE_SUB_CHANNELS:
         try:
-            user = await client.get_chat_member(channel["chat_id"], message.from_user.id)
+            user = await client.get_chat_member(channel["username"], message.from_user.id)
             if user.status in ["kicked", "banned"]:
                 await message.reply("You are banned from one of the required channels.")
                 return False
         except UserNotParticipant:
+            not_joined.append(channel["link"])
+        except Exception as e:
+            print(f"Error checking sub for {channel['username']}: {e}")
             not_joined.append(channel["link"])
 
     if not_joined:
@@ -137,7 +142,7 @@ async def filter_all(bot, update):
 async def search(bot, update):
     for channel in FORCE_SUB_CHANNELS:
         try:
-            await bot.get_chat_member(channel["chat_id"], update.from_user.id)
+            await bot.get_chat_member(channel["username"], update.from_user.id)
         except UserNotParticipant:
             return
 
@@ -180,3 +185,4 @@ threading.Thread(target=run_server).start()
 
 # Start Bot
 Bot.run()
+                                                
