@@ -2,11 +2,11 @@ import os
 import play_scraper
 from pyrogram import Client, filters
 from pyrogram.types import *
-from pyrogram.errors import UserNotParticipant
+from pyrogram.errors import UserNotParticipant, FloodWait
 import threading
 from http.server import SimpleHTTPRequestHandler, HTTPServer
+import asyncio
 
-# Initialize the bot client
 Bot = Client(
     "Play-Store-Bot",
     bot_token=os.environ["BOT_TOKEN"],
@@ -14,46 +14,45 @@ Bot = Client(
     api_hash=os.environ["API_HASH"]
 )
 
-# Admin user ID
-ADMIN_ID = int(os.environ.get("ADMIN_ID"))
+OWNER_ID = int(os.environ.get("OWNER_ID", 123456789))  # Replace 123456789 with your Telegram ID
 
-# Forced subscription channels
-FORCE_CHANNELS = [
-    {"chat_id": "freefirepannelfree", "link": "https://t.me/freefirepannelfree"},
-    {"chat_id": "tamilmovierequestda", "link": "https://t.me/tamilmovierequestda"},
-    {"chat_id": "+27yPnr6aQYo2NDE1", "link": "https://t.me/+_HZk2Yc4ug8xNTc9"},
-    {"chat_id": "+_HZk2Yc4ug8xNTc9", "link": "https://t.me/+_HZk2Yc4ug8xNTc9"}
+FORCE_SUB_CHANNELS = [
+    {"link": "https://t.me/+27yPnr6aQYo2NDE1", "chat_id": -1002211067746},
+    {"link": "https://t.me/+udIcxtizerAwOTRl", "chat_id": -1002010768345},
+    {"link": "https://t.me/+np4is6JZyyY3MTg1", "chat_id": -1002168359986},
+    {"link": "https://t.me/+A0LsNrMLyX8yOGM1", "chat_id": -1002096500701},
 ]
 
-# User data
 user_links = {}
-user_db = set()
+broadcasted_users = set()
 
-# Check if user is subscribed to all channels
-async def check_force_sub(client, message):
-    for channel in FORCE_CHANNELS:
+async def check_all_subs(client, message):
+    not_joined = []
+    for channel in FORCE_SUB_CHANNELS:
         try:
             user = await client.get_chat_member(channel["chat_id"], message.from_user.id)
             if user.status in ["kicked", "banned"]:
-                await message.reply("You are banned from using this bot.")
+                await message.reply("You are banned from one of the required channels.")
                 return False
         except UserNotParticipant:
-            await message.reply(
-                f"**To use this bot, please join [this channel]({channel['link']}) first.**",
-                disable_web_page_preview=True,
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("Join Channel", url=channel["link"]),
-                    InlineKeyboardButton("I've Joined", callback_data="checksub")
-                ]])
-            )
-            return False
+            not_joined.append(channel["link"])
+
+    if not_joined:
+        buttons = [[InlineKeyboardButton("Join📣", url=link)] for link in not_joined]
+        buttons.append([InlineKeyboardButton("Verify✅", callback_data="checksub")])
+        await message.reply(
+            "**Join all channels to use the bot:**",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+        return False
     return True
 
-# /setlink command (admin only)
 @Bot.on_message(filters.command("setlink") & filters.private)
 async def setlink(client, message):
-    if message.from_user.id != ADMIN_ID:
-        await message.reply("You are not authorized to use this command.")
+    if message.from_user.id != OWNER_ID:
+        return await message.reply("You're not authorized to use this command.")
+
+    if not await check_all_subs(client, message):
         return
     if len(message.command) < 2:
         await message.reply("Usage: `/setlink <your_modijiurl.com_link>`", parse_mode="Markdown")
@@ -61,56 +60,70 @@ async def setlink(client, message):
     user_links[message.from_user.id] = message.command[1]
     await message.reply("Your custom shortened link has been saved!")
 
-# /gen command
 @Bot.on_message(filters.command("gen") & filters.private)
 async def gen(client, message):
-    if not await check_force_sub(client, message):
+    if not await check_all_subs(client, message):
         return
-    user_db.add(message.from_user.id)
     user_id = message.from_user.id
     if user_id in user_links:
         await message.reply(f"Here is your shortened link: {user_links[user_id]}")
     else:
         await message.reply("No link found! Use `/setlink <your_modijiurl.com_link>` to set one.", parse_mode="Markdown")
 
-# /broadcast command (admin only)
 @Bot.on_message(filters.command("broadcast") & filters.private)
 async def broadcast(client, message):
-    if message.from_user.id != ADMIN_ID:
-        await message.reply("You're not allowed to broadcast.")
-        return
+    if message.from_user.id != OWNER_ID:
+        return await message.reply("You're not authorized to use this command.")
+    
     if len(message.command) < 2:
-        await message.reply("Usage: `/broadcast Your message here`", parse_mode="Markdown")
-        return
-    text = message.text.split(" ", 1)[1]
-    sent_count = 0
-    failed_count = 0
-    for user_id in list(user_db):
-        try:
-            await client.send_message(user_id, text)
-            sent_count += 1
-        except:
-            failed_count += 1
-    await message.reply(f"Broadcast complete.\nSuccess: {sent_count}\nFailed: {failed_count}")
+        return await message.reply("Usage: `/broadcast Your message here`", parse_mode="Markdown")
 
-# Handle private messages
+    text = message.text.split(" ", 1)[1]
+    sent = 0
+    failed = 0
+
+    async for user in Bot.get_dialogs():
+        try:
+            if user.chat.type == "private":
+                await client.send_message(user.chat.id, text)
+                sent += 1
+                await asyncio.sleep(0.1)
+        except FloodWait as e:
+            await asyncio.sleep(e.value)
+        except:
+            failed += 1
+
+    await message.reply(f"Broadcast completed!\n\n✅ Sent: {sent}\n❌ Failed: {failed}")
+
 @Bot.on_message(filters.private & filters.all)
 async def filter_all(bot, update):
-    if not await check_force_sub(bot, update):
+    if not await check_all_subs(bot, update):
         return
-    user_db.add(update.from_user.id)
-    text = "♥️HELLO FRIEND, PLEASE JOIN ALL CHANNELS BELOW TO USE THIS BOT:"
-    keyboard = [[InlineKeyboardButton(f"CHANNEL {i+1}", url=ch["link"])] for i, ch in enumerate(FORCE_CHANNELS)]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.reply_text(text=text, reply_markup=reply_markup, disable_web_page_preview=True, quote=True)
+    text = "Search play store apps using below buttons.\n\nMade by @FayasNoushad"
+    reply_markup = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(text="Search here", switch_inline_query_current_chat="")],
+            [InlineKeyboardButton(text="Search in another chat", switch_inline_query="")]
+        ]
+    )
+    await update.reply_text(
+        text=text,
+        reply_markup=reply_markup,
+        disable_web_page_preview=True,
+        quote=True
+    )
 
-# Inline search handler
 @Bot.on_inline_query()
 async def search(bot, update):
-    if not await check_force_sub(bot, update):
-        return
+    for channel in FORCE_SUB_CHANNELS:
+        try:
+            await bot.get_chat_member(channel["chat_id"], update.from_user.id)
+        except UserNotParticipant:
+            return
+
     results = play_scraper.search(update.query)
     answers = []
+
     for result in results:
         details = f"""
         **{result['title']}**
@@ -127,23 +140,21 @@ async def search(bot, update):
                 input_message_content=InputTextMessageContent(details)
             )
         )
+
     await update.answer(answers, cache_time=1, is_personal=True)
 
-# Callback handler
 @Bot.on_callback_query()
 async def callback_query_handler(client, callback_query):
     if callback_query.data == "checksub":
-        if await check_force_sub(client, callback_query.message):
+        if await check_all_subs(client, callback_query.message):
             await callback_query.message.edit("You are now verified! Send me the app name.")
         else:
-            await callback_query.answer("You're still not a member!", show_alert=True)
+            await callback_query.answer("You're still not subscribed to all channels.", show_alert=True)
 
-# Dummy server for Koyeb health check
 def run_server():
     server = HTTPServer(("0.0.0.0", 8080), SimpleHTTPRequestHandler)
     server.serve_forever()
 
 threading.Thread(target=run_server).start()
 
-# Start the bot
 Bot.run()
