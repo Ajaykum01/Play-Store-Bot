@@ -14,48 +14,42 @@ Bot = Client(
     api_hash=os.environ["API_HASH"]
 )
 
-# Admin user ID (set in env variables)
+# Admin user ID
 ADMIN_ID = int(os.environ.get("ADMIN_ID"))
 
-# Forced subscription channels (usernames without @)
+# Forced subscription channels
 FORCE_CHANNELS = [
-    "+_HZk2Yc4ug8xNTc9",
-    "+27yPnr6aQYo2NDE1",
-    "freefirepannelfree",
-    "tamilmovierequestda"
+    {"chat_id": "freefirepannelfree", "link": "https://t.me/freefirepannelfree"},
+    {"chat_id": "tamilmovierequestda", "link": "https://t.me/tamilmovierequestda"},
+    {"chat_id": "+27yPnr6aQYo2NDE1", "link": "https://t.me/+_HZk2Yc4ug8xNTc9"},
+    {"chat_id": "+_HZk2Yc4ug8xNTc9", "link": "https://t.me/+_HZk2Yc4ug8xNTc9"}
 ]
 
-# Dictionary to store user-specific links
+# User data
 user_links = {}
-
-# Store users for broadcasting
 user_db = set()
 
-# Function to check forced subscription to all channels
+# Check if user is subscribed to all channels
 async def check_force_sub(client, message):
     for channel in FORCE_CHANNELS:
         try:
-            user = await client.get_chat_member(channel, message.from_user.id)
+            user = await client.get_chat_member(channel["chat_id"], message.from_user.id)
             if user.status in ["kicked", "banned"]:
                 await message.reply("You are banned from using this bot.")
                 return False
         except UserNotParticipant:
-            try:
-                invite_link = await client.create_chat_invite_link(channel)
-            except:
-                invite_link = f"https://t.me/{channel}"
             await message.reply(
-                f"**To use this bot, please join [this channel](https://t.me/{channel}) first.**",
+                f"**To use this bot, please join [this channel]({channel['link']}) first.**",
                 disable_web_page_preview=True,
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("Join Channel", url=invite_link.invite_link if hasattr(invite_link, "invite_link") else invite_link),
+                    InlineKeyboardButton("Join Channel", url=channel["link"]),
                     InlineKeyboardButton("I've Joined", callback_data="checksub")
                 ]])
             )
             return False
     return True
 
-# /setlink (admin only)
+# /setlink command (admin only)
 @Bot.on_message(filters.command("setlink") & filters.private)
 async def setlink(client, message):
     if message.from_user.id != ADMIN_ID:
@@ -67,7 +61,7 @@ async def setlink(client, message):
     user_links[message.from_user.id] = message.command[1]
     await message.reply("Your custom shortened link has been saved!")
 
-# /gen command (public)
+# /gen command
 @Bot.on_message(filters.command("gen") & filters.private)
 async def gen(client, message):
     if not await check_force_sub(client, message):
@@ -88,9 +82,9 @@ async def broadcast(client, message):
     if len(message.command) < 2:
         await message.reply("Usage: `/broadcast Your message here`", parse_mode="Markdown")
         return
+    text = message.text.split(" ", 1)[1]
     sent_count = 0
     failed_count = 0
-    text = message.text.split(" ", 1)[1]
     for user_id in list(user_db):
         try:
             await client.send_message(user_id, text)
@@ -99,29 +93,18 @@ async def broadcast(client, message):
             failed_count += 1
     await message.reply(f"Broadcast complete.\nSuccess: {sent_count}\nFailed: {failed_count}")
 
-# Handler for private messages
+# Handle private messages
 @Bot.on_message(filters.private & filters.all)
 async def filter_all(bot, update):
     if not await check_force_sub(bot, update):
         return
     user_db.add(update.from_user.id)
-    text = "♥️HELLO FRIEND PLEASE JOIN BELOW CHANNELS🥰"
-    reply_markup = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton(text="CHANNEL 1", url="https://t.me/+_HZk2Yc4ug8xNTc9")],
-            [InlineKeyboardButton(text="CHANNEL 2", url="https://t.me/+27yPnr6aQYo2NDE1")],
-            [InlineKeyboardButton(text="CHANNEL 3", url="https://t.me/freefirepannelfree")],
-            [InlineKeyboardButton(text="CHANNEL 4", url="https://t.me/tamilmovierequestda")]
-        ]
-    )
-    await update.reply_text(
-        text=text,
-        reply_markup=reply_markup,
-        disable_web_page_preview=True,
-        quote=True
-    )
+    text = "♥️HELLO FRIEND, PLEASE JOIN ALL CHANNELS BELOW TO USE THIS BOT:"
+    keyboard = [[InlineKeyboardButton(f"CHANNEL {i+1}", url=ch["link"])] for i, ch in enumerate(FORCE_CHANNELS)]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.reply_text(text=text, reply_markup=reply_markup, disable_web_page_preview=True, quote=True)
 
-# Inline query handler
+# Inline search handler
 @Bot.on_inline_query()
 async def search(bot, update):
     if not await check_force_sub(bot, update):
@@ -146,7 +129,7 @@ async def search(bot, update):
         )
     await update.answer(answers, cache_time=1, is_personal=True)
 
-# Callback query handler
+# Callback handler
 @Bot.on_callback_query()
 async def callback_query_handler(client, callback_query):
     if callback_query.data == "checksub":
@@ -155,12 +138,12 @@ async def callback_query_handler(client, callback_query):
         else:
             await callback_query.answer("You're still not a member!", show_alert=True)
 
-# Start dummy web server to avoid Koyeb sleeping
+# Dummy server for Koyeb health check
 def run_server():
     server = HTTPServer(("0.0.0.0", 8080), SimpleHTTPRequestHandler)
     server.serve_forever()
 
 threading.Thread(target=run_server).start()
 
-# Run the bot
+# Start the bot
 Bot.run()
