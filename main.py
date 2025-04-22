@@ -77,8 +77,8 @@ async def filter_all(bot, update):
     text = "♥️HELLO FRIEND PLEASE JOIN BELOW CHANNEL🥰 JOIN MY CHANNEL 👇👇👇"
     reply_markup = InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton(text="CHANNEL 1", url=https://t.me/+_HZk2Yc4ug8xNTc9"")],
-            [InlineKeyboardButton(text="CHANNEL 2", url=https://t.me/+27yPnr6aQYo2NDE1"")]
+            [InlineKeyboardButton(text="CHANNEL 1", url="https://t.me/+_HZk2Yc4ug8xNTc9")],
+            [InlineKeyboardButton(text="CHANNEL 2", url="https://t.me/+27yPnr6aQYo2NDE1")]
         ]
     )
     await update.reply_text(
