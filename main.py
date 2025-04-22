@@ -16,7 +16,7 @@ Bot = Client(
     api_hash=os.environ["API_HASH"]
 )
 
-OWNER_ID = int(os.environ.get("OWNER_ID", 123456789))  # Replace with your Telegram ID
+OWNER_ID = int(os.environ.get("OWNER_ID", 2117119246))  # Replace with your Telegram ID
 
 FORCE_SUB_CHANNELS = [
     {"link": "https://t.me/+27yPnr6aQYo2NDE1", "chat_id": -1002211067746},
@@ -26,7 +26,7 @@ FORCE_SUB_CHANNELS = [
 ]
 
 # MongoDB Configuration
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/")
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://leo2:leo2@cluster0.njkefn7.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client["PlayStoreBot"]
 links_collection = db["user_links"]
