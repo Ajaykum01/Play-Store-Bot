@@ -2,7 +2,7 @@ import os
 import play_scraper
 from pyrogram import Client, filters
 from pyrogram.types import *
-from pyrogram.errors import UserNotParticipant, FloodWait
+from pyrogram.errors import FloodWait
 from pymongo import MongoClient
 import threading
 from http.server import SimpleHTTPRequestHandler, HTTPServer
@@ -18,54 +18,36 @@ Bot = Client(
 
 OWNER_ID = int(os.environ.get("OWNER_ID", 2117119246))  # Replace with your Telegram ID
 
-# Channels to force join - use usernames, not chat_ids
+# Private "Request to Join" Channel Invite Links
 FORCE_SUB_CHANNELS = [
-    {"link": "https://t.me/+A0LsNrMLyX8yOGM1", "username": "+A0LsNrMLyX8yOGM1"},
-    {"link": "https://t.me/+np4is6JZyyY3MTg1", "username": "+np4is6JZyyY3MTg1"},
-    {"link": "https://t.me/+udIcxtizerAwOTRl", "username": "+udIcxtizerAwOTRl"},
-    {"link": "https://t.me/+27yPnr6aQYo2NDE1", "username": "+27yPnr6aQYo2NDE1"},
+    {"link": "https://t.me/+A0LsNrMLyX8yOGM1"},
+    {"link": "https://t.me/+np4is6JZyyY3MTg1"},
+    {"link": "https://t.me/+udIcxtizerAwOTRl"},
+    {"link": "https://t.me/+27yPnr6aQYo2NDE1"},
 ]
 
 # MongoDB Configuration
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://leo2:leo2@cluster0.njkefn7.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+MONGO_URI = os.environ.get("MONGO_URI", "your_mongodb_uri_here")
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client["PlayStoreBot"]
 links_collection = db["user_links"]
 
 broadcasted_users = set()
 
-# Updated check_all_subs using channel usernames
+# Manual Join Prompt (no membership check due to private invite links)
 async def check_all_subs(client, message):
-    not_joined = []
-    for channel in FORCE_SUB_CHANNELS:
-        try:
-            user = await client.get_chat_member(channel["username"], message.from_user.id)
-            if user.status in ["kicked", "banned"]:
-                await message.reply("You are banned from one of the required channels.")
-                return False
-        except UserNotParticipant:
-            not_joined.append(channel["link"])
-        except Exception as e:
-            print(f"Error checking sub for {channel['username']}: {e}")
-            not_joined.append(channel["link"])
-
-    if not_joined:
-        buttons = [[InlineKeyboardButton("Join📣", url=link)] for link in not_joined]
-        buttons.append([InlineKeyboardButton("Verify✅", callback_data="checksub")])
-        await message.reply(
-            "**Join all channels to use the bot:**",
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-        return False
-    return True
+    buttons = [[InlineKeyboardButton("Join📣", url=ch["link"])] for ch in FORCE_SUB_CHANNELS]
+    buttons.append([InlineKeyboardButton("Verify✅", callback_data="checksub")])
+    await message.reply(
+        "**Join all channels to use the bot:**\nAfter joining, click Verify.",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+    return False  # Always prompt unless user clicks Verify
 
 @Bot.on_message(filters.command("setlink") & filters.private)
 async def setlink(client, message):
     if message.from_user.id != OWNER_ID:
         return await message.reply("You're not authorized to use this command.")
-
-    if not await check_all_subs(client, message):
-        return
 
     if len(message.command) < 2:
         await message.reply("Usage: `/setlink <your_modijiurl.com_link>`", parse_mode="Markdown")
@@ -84,9 +66,6 @@ async def setlink(client, message):
 
 @Bot.on_message(filters.command("gen") & filters.private)
 async def gen(client, message):
-    if not await check_all_subs(client, message):
-        return
-
     user_id = message.from_user.id
     data = links_collection.find_one({"user_id": user_id})
 
@@ -122,39 +101,20 @@ async def broadcast(client, message):
 
 @Bot.on_message(filters.private & filters.all)
 async def filter_all(bot, update):
-    if not await check_all_subs(bot, update):
-        return
-    text = "Search play store apps using below buttons.\n\nMade by @FayasNoushad"
-    reply_markup = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton(text="Search here", switch_inline_query_current_chat="")],
-            [InlineKeyboardButton(text="Search in another chat", switch_inline_query="")]
-        ]
-    )
-    await update.reply_text(
-        text=text,
-        reply_markup=reply_markup,
-        disable_web_page_preview=True,
-        quote=True
-    )
+    await check_all_subs(bot, update)
 
 @Bot.on_inline_query()
 async def search(bot, update):
-    for channel in FORCE_SUB_CHANNELS:
-        try:
-            await bot.get_chat_member(channel["username"], update.from_user.id)
-        except UserNotParticipant:
-            return
-
+    # skip check here since we can't verify joins
     results = play_scraper.search(update.query)
     answers = []
 
     for result in results:
         details = f"""
-        **{result['title']}**
-        {result['description']}
-        Rating: {result['score']}
-        [View on Play Store]({result['url']})
+**{result['title']}**
+{result['description']}
+Rating: {result['score']}
+[View on Play Store]({result['url']})
         """
         answers.append(
             InlineQueryResultArticle(
@@ -171,18 +131,14 @@ async def search(bot, update):
 @Bot.on_callback_query()
 async def callback_query_handler(client, callback_query):
     if callback_query.data == "checksub":
-        if await check_all_subs(client, callback_query.message):
-            await callback_query.message.edit("You are now verified! Send me the app name.")
-        else:
-            await callback_query.answer("You're still not subscribed to all channels.", show_alert=True)
+        await callback_query.message.edit("✅ You're now verified! You can use the bot.")
 
-# Run HTTP server (for Heroku uptime or similar)
+# Run HTTP server (for uptime)
 def run_server():
     server = HTTPServer(("0.0.0.0", 8080), SimpleHTTPRequestHandler)
     server.serve_forever()
 
 threading.Thread(target=run_server).start()
 
-# Start Bot
+# Start the bot
 Bot.run()
-                                                
