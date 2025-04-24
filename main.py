@@ -60,6 +60,9 @@ def parse_hour(time_str):
     except:
         return None
 
+def clean_text(text):
+    return text.encode("utf-8", "surrogatepass").decode("utf-8", "ignore")
+
 async def check_all_channels(bot, user_id):
     for url in FORCE_SUB_LINKS:
         try:
@@ -83,15 +86,15 @@ async def start(bot, message):
     is_subscribed = await check_all_channels(bot, user_id)
     
     if not is_subscribed:
-        buttons = [[InlineKeyboardButton("Join\ud83d\udce3", url=url)] for url in FORCE_SUB_LINKS]
-        buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
+        buttons = [[InlineKeyboardButton(clean_text("Join 📣"), url=url)] for url in FORCE_SUB_LINKS]
+        buttons.append([InlineKeyboardButton(clean_text("Verify ✅"), callback_data="verify")])
         reply_markup = InlineKeyboardMarkup(buttons)
-        await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
+        await message.reply(clean_text("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**"), reply_markup=reply_markup)
         return
 
     await message.reply(
-        "\ud83d\udcd7 Welcome to NST free Google Play Redeem Code Bot RS30-200\n\ud83d\ude0d Click On Generate Code \ud83d\ude3e",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
+        clean_text("📗 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 🐾"),
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(clean_text("Generate Code"), callback_data="gen_code")]])
     )
 
 @Bot.on_callback_query(filters.regex("verify"))
@@ -105,8 +108,8 @@ async def verify_channels(bot, query):
 
     await query.message.delete()
     await query.message.reply(
-        "\ud83d\udcd7 Welcome to NST free Google Play Redeem Code Bot RS30-200\n\ud83d\ude0d Click On Generate Code \ud83d\ude3e",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
+        clean_text("📗 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 🐾"),
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(clean_text("Generate Code"), callback_data="gen_code")]])
     )
 
 @Bot.on_callback_query(filters.regex("gen_code"))
@@ -120,12 +123,12 @@ async def generate_code(bot, query):
     image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
-        "**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
-        f"`hash:` `{hash_code}`\n"
-        f"**Code :** `{url}`"
+        clean_text("**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n")
+        + f"`hash:` `{hash_code}`\n"
+        + f"**Code :** `{url}`"
     )
 
-    buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
+    buttons = InlineKeyboardMarkup([[InlineKeyboardButton(clean_text("Generate Again"), callback_data="gen_code")]])
 
     await bot.send_photo(
         chat_id=query.message.chat.id,
@@ -216,4 +219,3 @@ if __name__ == "__main__":
     threading.Thread(target=run_server, daemon=True).start()
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
-
