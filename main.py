@@ -8,13 +8,13 @@ from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters, idle
 from pyrogram.types import *
+from pyrogram.errors import UserNotParticipant
 from pymongo import MongoClient
 from dotenv import load_dotenv
 import pytz
 
 load_dotenv()
 
-# MongoDB setup
 MONGO_URL = os.getenv("MONGO_URL")
 client = MongoClient(MONGO_URL)
 db = client["telegram_bot"]
@@ -22,9 +22,8 @@ config_collection = db["config"]
 users_collection = db["users"]
 
 ADMINS = [int(i) for i in os.getenv("ADMINS", "2117119246").split()]
-CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))  # Set your channel or group ID
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
 
-# Telegram Bot setup
 Bot = Client(
     "Play-Store-Bot",
     bot_token=os.environ["BOT_TOKEN"],
@@ -61,29 +60,62 @@ def parse_hour(time_str):
     except:
         return None
 
+async def check_all_channels(bot, user_id):
+    for url in FORCE_SUB_LINKS:
+        try:
+            username = url.split("t.me/")[-1].replace("+", "")
+            chat = await bot.get_chat(username)
+            member = await bot.get_chat_member(chat.id, user_id)
+            if member.status not in ("member", "administrator", "creator"):
+                return False
+        except UserNotParticipant:
+            return False
+        except Exception:
+            return False
+    return True
+
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(bot, message):
     user_id = message.from_user.id
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
 
-    buttons = [[InlineKeyboardButton("Join📣", url=url)] for url in FORCE_SUB_LINKS]
-    buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
-    reply_markup = InlineKeyboardMarkup(buttons)
-    await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
+    is_subscribed = await check_all_channels(bot, user_id)
+    
+    if not is_subscribed:
+        buttons = [[InlineKeyboardButton("Join\ud83d\udce3", url=url)] for url in FORCE_SUB_LINKS]
+        buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
+        reply_markup = InlineKeyboardMarkup(buttons)
+        await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
+        return
+
+    await message.reply(
+        "\ud83d\udcd7 Welcome to NST free Google Play Redeem Code Bot RS30-200\n\ud83d\ude0d Click On Generate Code \ud83d\ude3e",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
+    )
 
 @Bot.on_callback_query(filters.regex("verify"))
 async def verify_channels(bot, query):
+    user_id = query.from_user.id
+    is_subscribed = await check_all_channels(bot, user_id)
+
+    if not is_subscribed:
+        await query.answer("Please join all channels before proceeding!", show_alert=True)
+        return
+
     await query.message.delete()
     await query.message.reply(
-        "📗 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 👾",
+        "\ud83d\udcd7 Welcome to NST free Google Play Redeem Code Bot RS30-200\n\ud83d\ude0d Click On Generate Code \ud83d\ude3e",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
 @Bot.on_callback_query(filters.regex("gen_code"))
 async def generate_code(bot, query):
-    config = config_collection.find_one({"_id": "config"}) or {}
-    url = config.get("redeem_url", "https://modijiurl.com")
+    now = datetime.now(pytz.timezone("Asia/Kolkata"))
+    current_hour = str(now.hour)
+    links = load_links()
+    url = links.get(current_hour, "https://fallbacklink.com")
+
     hash_code = generate_random_hash()
     image_url = "https://envs.sh/CCn.jpg"
 
@@ -101,7 +133,6 @@ async def generate_code(bot, query):
         caption=caption,
         reply_markup=buttons
     )
-
     await query.answer()
 
 @Bot.on_message(filters.command("setlink") & filters.private)
@@ -134,8 +165,7 @@ async def broadcast(bot, message):
 async def set_hourly_links(bot, message):
     if message.from_user.id not in ADMINS:
         return await message.reply("You are not authorized to use this command.")
-    
-    lines = message.text.split("\n")[1:]  # skip the /time line
+    lines = message.text.split("\n")[1:]
     links = {}
     for line in lines:
         try:
@@ -145,7 +175,6 @@ async def set_hourly_links(bot, message):
                 links[str(hour)] = url
         except:
             continue
-
     save_links(links)
     await message.reply("Hourly links have been set.")
 
@@ -162,7 +191,6 @@ async def send_hourly_links():
         next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
         await asyncio.sleep((next_hour - now).total_seconds())
 
-# Health check server to prevent Koyeb sleep
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -188,3 +216,4 @@ if __name__ == "__main__":
     threading.Thread(target=run_server, daemon=True).start()
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
+
