@@ -2,80 +2,42 @@ import os
 import threading
 import random
 import string
-import json
-import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from pyrogram import Client, filters, idle
+from pyrogram import Client, filters
 from pyrogram.types import *
-from pyrogram.errors import UserNotParticipant
 from pymongo import MongoClient
 from dotenv import load_dotenv
 import pytz
 
 load_dotenv()
 
+# MongoDB setup
 MONGO_URL = os.getenv("MONGO_URL")
 client = MongoClient(MONGO_URL)
 db = client["telegram_bot"]
-config_collection = db["config"]
+config_collection = db["hourly_links"]
 users_collection = db["users"]
 
-ADMINS = [int(i) for i in os.getenv("ADMINS", "2117119246").split()]
-CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
+ADMINS = [int(i) for i in os.getenv("ADMINS", "").split()]
 
+# Telegram Bot setup
 Bot = Client(
-    "Play-Store-Bot",
+    "RedeemBot",
     bot_token=os.environ["BOT_TOKEN"],
     api_id=int(os.environ["API_ID"]),
     api_hash=os.environ["API_HASH"]
 )
 
-FORCE_SUB_LINKS = [
-    "https://t.me/+27yPnr6aQYo2NDE1",
-    "https://t.me/+udIcxtizerAwOTRl",
-    "https://t.me/+np4is6JZyyY3MTg1",
-    "https://t.me/+A0LsNrMLyX8yOGM1",
-]
-
-LINKS_FILE = "hourly_links.json"
+FORCE_SUB_LINKS = os.getenv("FORCE_SUB_LINKS", "").split()
 
 def generate_random_hash():
     return ''.join(random.choices(string.hexdigits.lower(), k=64))
 
-def load_links():
-    if os.path.exists(LINKS_FILE):
-        with open(LINKS_FILE, "r") as f:
-            return json.load(f)
-    return {}
-
-def save_links(links):
-    with open(LINKS_FILE, "w") as f:
-        json.dump(links, f)
-
-def parse_hour(time_str):
-    try:
-        dt = datetime.strptime(time_str.lower(), "%I%p")
-        return dt.hour
-    except:
-        return None
-
-def clean_text(text):
-    return text.encode("utf-8", "surrogatepass").decode("utf-8", "ignore")
-
-async def check_all_channels(bot, user_id):
-    for url in FORCE_SUB_LINKS:
-        try:
-            invite_hash = url.split("+")[-1]
-            chat = await bot.join_chat(invite_hash)
-            member = await bot.get_chat_member(chat.id, user_id)
-            if member.status not in ("member", "administrator", "creator"):
-                return False
-        except UserNotParticipant:
-            return False
-        except Exception:
-            return False
-    return True
+def get_current_hour_key():
+    ist = pytz.timezone("Asia/Kolkata")
+    now = datetime.now(ist)
+    return now.strftime("%-I%p").lower()  # e.g. 6am, 7pm
 
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(bot, message):
@@ -83,53 +45,38 @@ async def start(bot, message):
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
 
-    is_subscribed = await check_all_channels(bot, user_id)
-
-    if not is_subscribed:
-        buttons = [[InlineKeyboardButton(clean_text("Join 📣"), url=url)] for url in FORCE_SUB_LINKS]
-        buttons.append([InlineKeyboardButton(clean_text("Verify ✅"), callback_data="verify")])
-        reply_markup = InlineKeyboardMarkup(buttons)
-        await message.reply(clean_text("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**"), reply_markup=reply_markup)
-        return
-
-    await message.reply(
-        clean_text("📗 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 🐾"),
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(clean_text("Generate Code"), callback_data="gen_code")]])
-    )
+    buttons = [[InlineKeyboardButton("Join Channel", url=url)] for url in FORCE_SUB_LINKS]
+    buttons.append([InlineKeyboardButton("Verify", callback_data="verify")])
+    reply_markup = InlineKeyboardMarkup(buttons)
+    await message.reply("**JOIN ALL CHANNELS TO USE THIS BOT**", reply_markup=reply_markup)
 
 @Bot.on_callback_query(filters.regex("verify"))
 async def verify_channels(bot, query):
-    user_id = query.from_user.id
-    is_subscribed = await check_all_channels(bot, user_id)
-
-    if not is_subscribed:
-        await query.answer("Please join all channels before proceeding!", show_alert=True)
-        return
-
     await query.message.delete()
     await query.message.reply(
-        clean_text("📗 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 🐾"),
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(clean_text("Generate Code"), callback_data="gen_code")]])
+        "**Welcome! Click below to generate your redeem code:**",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
 @Bot.on_callback_query(filters.regex("gen_code"))
 async def generate_code(bot, query):
-    now = datetime.now(pytz.timezone("Asia/Kolkata"))
-    current_hour = str(now.hour)
-    links = load_links()
-    url = links.get(current_hour, "https://fallbacklink.com")
-
+    current_hour = get_current_hour_key()
+    config = config_collection.find_one({"_id": current_hour}) or {}
+    url = config.get("url", "https://default.com")
     hash_code = generate_random_hash()
     image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
-        clean_text("**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n")
-        + f"`hash:` `{hash_code}`\n"
-        + f"**Code :** `{url}`"
+        "**Your Redeem Code Generated successfully!**
+"
+        "✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot
+
+"
+        f"`hash:` `{hash_code}`
+"
+        f"**Code :** `{url}`"
     )
-
-    buttons = InlineKeyboardMarkup([[InlineKeyboardButton(clean_text("Generate Again"), callback_data="gen_code")]])
-
+    buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
     await bot.send_photo(
         chat_id=query.message.chat.id,
         photo=image_url,
@@ -138,62 +85,38 @@ async def generate_code(bot, query):
     )
     await query.answer()
 
-@Bot.on_message(filters.command("setlink") & filters.private)
-async def set_link(bot, message):
+@Bot.on_message(filters.command("time") & filters.private)
+async def set_hour_link(bot, message):
     if message.from_user.id not in ADMINS:
         return await message.reply("You are not authorized to use this command.")
-    if len(message.command) < 2:
-        return await message.reply("Usage: /setlink <url>")
-    url = message.text.split(None, 1)[1]
-    config_collection.update_one({"_id": "config"}, {"$set": {"redeem_url": url}}, upsert=True)
-    await message.reply("Redeem link updated successfully.")
+    try:
+        parts = message.text.split(None, 2)
+        hour_key = parts[1].lower()
+        url = parts[2]
+        config_collection.update_one({"_id": hour_key}, {"$set": {"url": url}}, upsert=True)
+        await message.reply(f"Link set for {hour_key} as {url}")
+    except:
+        await message.reply("Format:
+/time 6am https://link.com")
 
+# Broadcast
 @Bot.on_message(filters.command("broadcast") & filters.private)
 async def broadcast(bot, message):
     if message.from_user.id not in ADMINS:
-        return await message.reply("You are not authorized to use this command.")
+        return await message.reply("Not authorized.")
     if len(message.command) < 2:
-        return await message.reply("Usage: /broadcast <your message>")
-    broadcast_text = message.text.split(None, 1)[1]
+        return await message.reply("Usage: /broadcast <message>")
+    text = message.text.split(None, 1)[1]
     count = 0
     for user in users_collection.find():
         try:
-            await bot.send_message(chat_id=user['_id'], text=broadcast_text)
+            await bot.send_message(chat_id=user['_id'], text=text)
             count += 1
         except:
             continue
-    await message.reply(f"Broadcast sent to {count} users.")
+    await message.reply(f"Message sent to {count} users.")
 
-@Bot.on_message(filters.command("time") & filters.private)
-async def set_hourly_links(bot, message):
-    if message.from_user.id not in ADMINS:
-        return await message.reply("You are not authorized to use this command.")
-    lines = message.text.split("\n")[1:]
-    links = {}
-    for line in lines:
-        try:
-            time_str, url = line.strip().split()
-            hour = parse_hour(time_str)
-            if hour is not None:
-                links[str(hour)] = url
-        except:
-            continue
-    save_links(links)
-    await message.reply("Hourly links have been set.")
-
-async def send_hourly_links():
-    while True:
-        now = datetime.now(pytz.timezone("Asia/Kolkata"))
-        current_hour = str(now.hour)
-        links = load_links()
-        if current_hour in links:
-            try:
-                await Bot.send_message(chat_id=CHANNEL_ID, text=f"Link for {now.strftime('%I:%M %p')} IST:\n{links[current_hour]}")
-            except Exception as e:
-                print(f"Error sending hourly link: {e}")
-        next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        await asyncio.sleep((next_hour - now).total_seconds())
-
+# Health check
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -201,24 +124,10 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"Bot is Alive!")
 
-    def do_HEAD(self):
-        self.send_response(200)
-        self.end_headers()
-
 def run_server():
     server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
     server.serve_forever()
 
-async def main():
-    await Bot.start()
-    asyncio.create_task(send_hourly_links())
-    await idle()
-    await Bot.stop()
-
-if __name__ == "__main__":
-    threading.Thread(target=run_server, daemon=True).start()
-    try:
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(main())
-    except Exception as e:
-        print(f"Bot crashed with error: {e}")
+threading.Thread(target=run_server).start()
+Bot.run()
+    
