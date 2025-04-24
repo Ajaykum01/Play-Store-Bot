@@ -178,13 +178,13 @@ def run_server():
     server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
     server.serve_forever()
 
-# Start health check server in background
-threading.Thread(target=run_server).start()
-
-# Run the bot and start hourly link task
 async def main():
     await Bot.start()
     asyncio.create_task(send_hourly_links())
     await idle()
+    await Bot.stop()
 
-asyncio.run(main())
+if __name__ == "__main__":
+    threading.Thread(target=run_server, daemon=True).start()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
