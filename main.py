@@ -6,7 +6,7 @@ import json
 import asyncio
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from pyrogram import Client, filters
+from pyrogram import Client, filters, idle
 from pyrogram.types import *
 from pymongo import MongoClient
 from dotenv import load_dotenv
