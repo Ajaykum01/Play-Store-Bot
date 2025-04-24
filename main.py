@@ -35,10 +35,10 @@ FORCE_SUB_LINKS = [
 ]
 
 CHANNEL_IDS = [
-    -1002211067746,  # Replace with your actual channel IDs
-    -1002010768345,
-    -1002168359986,
-    -1002096500701
+    -1002111111111,
+    -1002222222222,
+    -1002333333333,
+    -1002444444444
 ]
 
 def generate_random_hash():
@@ -46,7 +46,7 @@ def generate_random_hash():
 
 def get_current_hour_key():
     ist = pytz.timezone("Asia/Kolkata")
-    hour = datetime.now(ist).strftime("%I%p").lstrip("0").lower()  # e.g., '6am'
+    hour = datetime.now(ist).strftime("%I%p").lstrip("0").lower()
     return hour
 
 @Bot.on_message(filters.command("start") & filters.private)
@@ -149,6 +149,11 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "text/plain")
         self.end_headers()
         self.wfile.write(b"Bot is Alive!")
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
 
 def run_server():
     server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
