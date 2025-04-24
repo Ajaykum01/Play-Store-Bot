@@ -170,6 +170,10 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"Bot is Alive!")
 
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
+
 def run_server():
     server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
     server.serve_forever()
@@ -181,7 +185,6 @@ threading.Thread(target=run_server).start()
 async def main():
     await Bot.start()
     asyncio.create_task(send_hourly_links())
-    from pyrogram.idle import idle
     await idle()
 
 asyncio.run(main())
