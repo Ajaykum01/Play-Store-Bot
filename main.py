@@ -9,6 +9,7 @@ from pymongo import MongoClient
 from dotenv import load_dotenv
 from datetime import datetime
 import pytz
+import asyncio
 
 load_dotenv()
 
@@ -27,9 +28,9 @@ Bot = Client(
     api_hash=os.environ["API_HASH"]
 )
 
-def get_force_sub_links():
+def get_force_sub_chats():
     config = config_collection.find_one({"_id": "config"}) or {}
-    return config.get("force_sub_links", [])
+    return config.get("force_sub_chats", [])
 
 def generate_random_hash():
     return ''.join(random.choices(string.hexdigits.lower(), k=64))
@@ -38,14 +39,15 @@ def safe_text(text):
     return ''.join(c for c in text if not 0xD800 <= ord(c) <= 0xDFFF)
 
 async def check_user_joined(bot, user_id):
-    links = get_force_sub_links()
-    for url in links:
+    chat_ids = get_force_sub_chats()
+    for chat_id in chat_ids:
         try:
-            username = url.split("t.me/")[1].replace("+", "")
-            member = await bot.get_chat_member(chat_id=username, user_id=user_id)
+            member = await bot.get_chat_member(chat_id=int(chat_id), user_id=user_id)
             if member.status not in ("member", "administrator", "creator"):
+                print(f"User {user_id} not a member in {chat_id}")
                 return False
-        except:
+        except Exception as e:
+            print(f"[ERROR] while checking chat {chat_id}: {e}")
             return False
     return True
 
@@ -58,20 +60,29 @@ async def start(bot, message):
     if await check_user_joined(bot, user_id):
         await verify_channels(bot, message)
     else:
-        buttons = [[InlineKeyboardButton(safe_text("Join📣"), url=url)] for url in get_force_sub_links()]
-        buttons.append([InlineKeyboardButton(safe_text("Verify✅"), callback_data="verify")])
-        reply_markup = InlineKeyboardMarkup(buttons)
-        await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
+        chat_ids = get_force_sub_chats()
+        buttons = []
+        for cid in chat_ids:
+            try:
+                chat = await bot.get_chat(cid)
+                if chat.username:
+                    url = f"https://t.me/{chat.username}"
+                    buttons.append([InlineKeyboardButton("Join📣", url=url)])
+            except Exception as e:
+                print(f"[ERROR] while building button for {cid}: {e}")
+        buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
+        await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=InlineKeyboardMarkup(buttons))
 
 @Bot.on_callback_query(filters.regex("verify"))
 async def verify_channels(bot, query):
+    await asyncio.sleep(2)
     if not await check_user_joined(bot, query.from_user.id):
         return await query.answer("Join all channels first!", show_alert=True)
 
     await query.message.delete()
     await query.message.reply(
         safe_text("📗 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 🔾"),
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(safe_text("Generate Code"), callback_data="gen_code")]])
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
 @Bot.on_callback_query(filters.regex("gen_code"))
@@ -90,7 +101,7 @@ async def generate_code(bot, query):
         f"**Code :** `{url}`"
     )
 
-    buttons = InlineKeyboardMarkup([[InlineKeyboardButton(safe_text("Generate Again"), callback_data="gen_code")]])
+    buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
 
     await bot.send_photo(
         chat_id=query.message.chat.id,
@@ -122,11 +133,15 @@ async def set_channels(bot, message):
     if message.from_user.id not in ADMINS:
         return await message.reply("You're not authorized to set channels.")
     text = message.text.split(None, 1)[1] if len(message.command) > 1 else ""
-    urls = text.split()
-    if len(urls) < 1:
-        return await message.reply("Usage: /setchannels <link1> <link2> ...")
-    config_collection.update_one({"_id": "config"}, {"$set": {"force_sub_links": urls}}, upsert=True)
-    await message.reply("Force subscription channels updated successfully.")
+    chat_ids = text.split()
+    if len(chat_ids) < 1:
+        return await message.reply("Usage: /setchannels <chat_id1> <chat_id2> ...")
+    try:
+        int_ids = [int(cid) for cid in chat_ids]
+        config_collection.update_one({"_id": "config"}, {"$set": {"force_sub_chats": int_ids}}, upsert=True)
+        await message.reply("Force subscription channel IDs updated successfully.")
+    except ValueError:
+        await message.reply("Invalid chat ID(s). Make sure they are numbers.")
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
