@@ -217,5 +217,8 @@ async def main():
 
 if __name__ == "__main__":
     threading.Thread(target=run_server, daemon=True).start()
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    try:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main())
+    except Exception as e:
+        print(f"Bot crashed with error: {e}")
