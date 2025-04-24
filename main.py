@@ -2,11 +2,15 @@ import os
 import threading
 import random
 import string
+import json
+import asyncio
+from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
 from pyrogram.types import *
 from pymongo import MongoClient
 from dotenv import load_dotenv
+import pytz
 
 load_dotenv()
 
@@ -18,6 +22,7 @@ config_collection = db["config"]
 users_collection = db["users"]
 
 ADMINS = [int(i) for i in os.getenv("ADMINS", "2117119246").split()]
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))  # Set your channel or group ID
 
 # Telegram Bot setup
 Bot = Client(
@@ -34,8 +39,27 @@ FORCE_SUB_LINKS = [
     "https://t.me/+A0LsNrMLyX8yOGM1",
 ]
 
+LINKS_FILE = "hourly_links.json"
+
 def generate_random_hash():
     return ''.join(random.choices(string.hexdigits.lower(), k=64))
+
+def load_links():
+    if os.path.exists(LINKS_FILE):
+        with open(LINKS_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_links(links):
+    with open(LINKS_FILE, "w") as f:
+        json.dump(links, f)
+
+def parse_hour(time_str):
+    try:
+        dt = datetime.strptime(time_str.lower(), "%I%p")
+        return dt.hour
+    except:
+        return None
 
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(bot, message):
@@ -106,6 +130,38 @@ async def broadcast(bot, message):
             continue
     await message.reply(f"Broadcast sent to {count} users.")
 
+@Bot.on_message(filters.command("time") & filters.private)
+async def set_hourly_links(bot, message):
+    if message.from_user.id not in ADMINS:
+        return await message.reply("You are not authorized to use this command.")
+    
+    lines = message.text.split("\n")[1:]  # skip the /time line
+    links = {}
+    for line in lines:
+        try:
+            time_str, url = line.strip().split()
+            hour = parse_hour(time_str)
+            if hour is not None:
+                links[str(hour)] = url
+        except:
+            continue
+
+    save_links(links)
+    await message.reply("Hourly links have been set.")
+
+async def send_hourly_links():
+    while True:
+        now = datetime.now(pytz.timezone("Asia/Kolkata"))
+        current_hour = str(now.hour)
+        links = load_links()
+        if current_hour in links:
+            try:
+                await Bot.send_message(chat_id=CHANNEL_ID, text=f"Link for {now.strftime('%I:%M %p')} IST:\n{links[current_hour]}")
+            except Exception as e:
+                print(f"Error sending hourly link: {e}")
+        next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        await asyncio.sleep((next_hour - now).total_seconds())
+
 # Health check server to prevent Koyeb sleep
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -121,5 +177,11 @@ def run_server():
 # Start health check server in background
 threading.Thread(target=run_server).start()
 
-# Run the bot
-Bot.run()
+# Run the bot and start hourly link task
+async def main():
+    await Bot.start()
+    asyncio.create_task(send_hourly_links())
+    from pyrogram.idle import idle
+    await idle()
+
+asyncio.run(main())
