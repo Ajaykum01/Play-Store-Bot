@@ -18,7 +18,7 @@ db = client["telegram_bot"]
 config_collection = db["config"]
 users_collection = db["users"]
 
-ADMINS = [int(i) for i in os.getenv("ADMINS", "").split()]
+ADMINS = [int(i) for i in os.getenv("ADMINS", "2117119246").split()]
 
 Bot = Client(
     "Play-Store-Bot",
