@@ -34,6 +34,9 @@ def get_force_sub_links():
 def generate_random_hash():
     return ''.join(random.choices(string.hexdigits.lower(), k=64))
 
+def safe_text(text):
+    return ''.join(c for c in text if not 0xD800 <= ord(c) <= 0xDFFF)
+
 async def check_user_joined(bot, user_id):
     links = get_force_sub_links()
     for url in links:
@@ -55,8 +58,8 @@ async def start(bot, message):
     if await check_user_joined(bot, user_id):
         await verify_channels(bot, message)
     else:
-        buttons = [[InlineKeyboardButton("Join\ud83d\udce3", url=url)] for url in get_force_sub_links()]
-        buttons.append([InlineKeyboardButton("Verify\u2705", callback_data="verify")])
+        buttons = [[InlineKeyboardButton(safe_text("Join📣"), url=url)] for url in get_force_sub_links()]
+        buttons.append([InlineKeyboardButton(safe_text("Verify✅"), callback_data="verify")])
         reply_markup = InlineKeyboardMarkup(buttons)
         await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
 
@@ -67,8 +70,8 @@ async def verify_channels(bot, query):
 
     await query.message.delete()
     await query.message.reply(
-        "\ud83d\udcd7 Welcome to NST free Google Play Redeem Code Bot RS30-200\n\ud83d\ude0d Click On Generate Code \ud83d\udd3e",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
+        safe_text("📗 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 🔾"),
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(safe_text("Generate Code"), callback_data="gen_code")]])
     )
 
 @Bot.on_callback_query(filters.regex("gen_code"))
@@ -82,12 +85,12 @@ async def generate_code(bot, query):
     image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
-        "**Your Redeem Code Generated successfully\u2705 IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
-        f"`hash:` `{hash_code}`\n"
+        safe_text("**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n") +
+        f"`hash:` `{hash_code}`\n" +
         f"**Code :** `{url}`"
     )
 
-    buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
+    buttons = InlineKeyboardMarkup([[InlineKeyboardButton(safe_text("Generate Again"), callback_data="gen_code")]])
 
     await bot.send_photo(
         chat_id=query.message.chat.id,
