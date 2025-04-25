@@ -28,10 +28,10 @@ Bot = Client(
 
 # Replace with actual private channel chat IDs
 FORCE_SUB_CHAT_IDS = [
-    -1001234567890,
-    -1009876543210,
-    -1001122334455,
-    -1005566778899
+    -1002211067746,
+    -1002010768345,
+    -1002168359986,
+    -1002096500701
 ]
 
 # Corresponding invite links for UI
