@@ -30,7 +30,7 @@ Bot = Client(
 
 FORCE_SUB_LINKS = [
     "https://t.me/+27yPnr6aQYo2NDE1",
-    "https://t.me/+udIcxtizerAwOTRl",
+    "https://t.me/+gcKYZL9DMfZhMjU1",
     "https://t.me/+np4is6JZyyY3MTg1",
     "https://t.me/+A0LsNrMLyX8yOGM1",
 ]
