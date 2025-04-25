@@ -2,6 +2,7 @@ import os
 import threading
 import random
 import string
+import atexit
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
 from pyrogram.types import *
@@ -64,13 +65,16 @@ def get_current_ist_key():
 def update_redeem_link():
     config = config_collection.find_one({"_id": "timed_links"}) or {}
     current_key = get_current_ist_key()
-    fallback = config.get("6am")  # fallback to 6am if current not found
+    fallback = config.get("6am")
     link = config.get(current_key, fallback)
     config_collection.update_one({"_id": "config"}, {"$set": {"redeem_url": link}}, upsert=True)
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(update_redeem_link, 'interval', minutes=1)
 scheduler.start()
+
+# Clean shutdown of scheduler
+atexit.register(lambda: scheduler.shutdown(wait=False))
 
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(bot, message):
@@ -168,7 +172,7 @@ async def broadcast(bot, message):
             continue
     await message.reply(f"Broadcast sent to {count} users.")
 
-# Health check server to prevent Koyeb sleep
+# Health check server with HEAD support
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -176,12 +180,17 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"Bot is Alive!")
 
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+
 def run_server():
     server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
     server.serve_forever()
 
 # Start health check server in background
-threading.Thread(target=run_server).start()
+threading.Thread(target=run_server, daemon=True).start()
 
 # Run the bot
 Bot.run()
