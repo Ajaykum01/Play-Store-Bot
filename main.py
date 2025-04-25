@@ -67,7 +67,7 @@ async def start(bot, message):
         return await message.reply("**JOIN GIVEN CHANNELS TO GET REDEEM CODE**", reply_markup=InlineKeyboardMarkup(buttons))
 
     await message.reply(
-        "📚 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 👾",
+        "📚 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 💾",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
