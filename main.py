@@ -7,6 +7,8 @@ from pyrogram import Client, filters
 from pyrogram.types import *
 from pymongo import MongoClient
 from dotenv import load_dotenv
+import pytz
+from datetime import datetime
 
 load_dotenv()
 
@@ -26,7 +28,6 @@ Bot = Client(
     api_hash=os.environ["API_HASH"]
 )
 
-# Replace with actual private channel chat IDs
 FORCE_SUB_CHAT_IDS = [
     -1002211067746,
     -1002010768345,
@@ -34,7 +35,6 @@ FORCE_SUB_CHAT_IDS = [
     -1002096500701
 ]
 
-# Corresponding invite links for UI
 FORCE_SUB_LINKS = [
     "https://t.me/+27yPnr6aQYo2NDE1",
     "https://t.me/+udIcxtizerAwOTRl",
@@ -55,6 +55,12 @@ async def is_user_subscribed(bot, user_id):
 def generate_random_hash():
     return ''.join(random.choices(string.hexdigits.lower(), k=64))
 
+def get_current_hour_ist():
+    tz = pytz.timezone('Asia/Kolkata')
+    now = datetime.now(tz)
+    hour = now.strftime("%-I%p").lower()  # eg: 6am, 7pm
+    return hour
+
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(bot, message):
     user_id = message.from_user.id
@@ -67,7 +73,7 @@ async def start(bot, message):
         return await message.reply("**JOIN GIVEN CHANNELS TO GET REDEEM CODE**", reply_markup=InlineKeyboardMarkup(buttons))
 
     await message.reply(
-        "📚 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 💾",
+        "\ud83d\udcda Welcome to NST free Google Play Redeem Code Bot RS30-200\n\ud83d\ude0d Click On Generate Code \ud83d\udcc0",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
@@ -77,7 +83,7 @@ async def verify_channels(bot, query):
     if await is_user_subscribed(bot, user_id):
         await query.message.delete()
         await query.message.reply(
-            "📚 You’re Verified!\nClick Below to Generate Code.",
+            "\ud83d\udcda You’re Verified!\nClick Below to Generate Code.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
         )
     else:
@@ -94,7 +100,12 @@ async def generate_code(bot, query):
         return await query.message.reply("**You left a required channel. Please rejoin and press Verify.**", reply_markup=InlineKeyboardMarkup(buttons))
 
     config = config_collection.find_one({"_id": "config"}) or {}
-    url = config.get("redeem_url", "https://modijiurl.com")
+    default_url = config.get("redeem_url", "https://modijiurl.com")
+    hourly_links = config.get("hourly_links", {})
+
+    current_hour = get_current_hour_ist()
+    url = hourly_links.get(current_hour, default_url)
+
     hash_code = generate_random_hash()
     image_url = "https://envs.sh/CCn.jpg"
 
@@ -121,7 +132,26 @@ async def set_link(bot, message):
         return await message.reply("Usage: /setlink <url>")
     url = message.text.split(None, 1)[1]
     config_collection.update_one({"_id": "config"}, {"$set": {"redeem_url": url}}, upsert=True)
-    await message.reply("Redeem link updated successfully.")
+    await message.reply("Default redeem link updated successfully.")
+
+@Bot.on_message(filters.command("time") & filters.private)
+async def set_time_links(bot, message):
+    if message.from_user.id not in ADMINS:
+        return await message.reply("You are not authorized to use this command.")
+    parts = message.text.split()
+    if len(parts) < 3:
+        return await message.reply("Usage: /time 6am https://link 7am https://link ...")
+
+    time_links = {}
+    i = 1
+    while i < len(parts) - 1:
+        time = parts[i].lower()
+        link = parts[i + 1]
+        time_links[time] = link
+        i += 2
+
+    config_collection.update_one({"_id": "config"}, {"$set": {"hourly_links": time_links}}, upsert=True)
+    await message.reply("Hourly links updated successfully!")
 
 @Bot.on_message(filters.command("broadcast") & filters.private)
 async def broadcast(bot, message):
@@ -139,7 +169,6 @@ async def broadcast(bot, message):
             continue
     await message.reply(f"Broadcast sent to {count} users.")
 
-# Health check server to prevent Koyeb sleep
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -151,8 +180,6 @@ def run_server():
     server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
     server.serve_forever()
 
-# Start health check server in background
 threading.Thread(target=run_server).start()
 
-# Run the bot
 Bot.run()
