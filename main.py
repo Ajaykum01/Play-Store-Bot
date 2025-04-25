@@ -159,7 +159,7 @@ server.serve_forever()
 
 threading.Thread(target=run_server).start()
 
-# Run the bot
+Run the bot
 
 Bot.run()
 
