@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # MongoDB setup
-MONGO_URL = os.getenv("mongodb+srv://leo2:leo2@cluster0.njkefn7.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+MONGO_URL = os.getenv("MONGO_URL")
 client = MongoClient(MONGO_URL)
 db = client["telegram_bot"]
 config_collection = db["config"]
@@ -61,12 +61,12 @@ async def start(bot, message):
 
     if user.get("verified") and await is_user_joined(bot, user_id):
         await message.reply(
-            "ðŸ“— Welcome back to NST free Google Play Redeem Code Bot RS30-200\nðŸ˜ Click On Generate Code ðŸ‘¾",
+            "📗 Welcome back to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 👾",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
         )
     else:
-        buttons = [[InlineKeyboardButton("JoinðŸ“£", url=url)] for url in FORCE_SUB_LINKS]
-        buttons.append([InlineKeyboardButton("Verifyâœ…", callback_data="verify")])
+        buttons = [[InlineKeyboardButton("Join📣", url=url)] for url in FORCE_SUB_LINKS]
+        buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
         reply_markup = InlineKeyboardMarkup(buttons)
         await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
 
@@ -77,7 +77,7 @@ async def verify_channels(bot, query):
         users_collection.update_one({"_id": user_id}, {"$set": {"verified": True}}, upsert=True)
         await query.message.delete()
         await query.message.reply(
-            "ðŸ“— Welcome to NST free Google Play Redeem Code Bot RS30-200\nðŸ˜ Click On Generate Code ðŸ‘¾",
+            "📗 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 👾",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
         )
     else:
@@ -91,7 +91,7 @@ async def generate_code(bot, query):
     image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
-        "**Your Redeem Code Generated successfullyâœ… IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
+        "**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
         f"`hash:` `{hash_code}`\n"
         f"**Code :** `{url}`"
     )
@@ -140,6 +140,10 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "text/plain")
         self.end_headers()
         self.wfile.write(b"Bot is Alive!")
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
 
 def run_server():
     server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
