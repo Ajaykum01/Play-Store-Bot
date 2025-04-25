@@ -1,5 +1,7 @@
 import os
 import logging
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import UserNotParticipant
@@ -22,6 +24,19 @@ ADMINS = [int(x) for x in os.environ.get("ADMINS", "").split()]
 Bot = Client("biisal-bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 logging.basicConfig(level=logging.INFO)
+
+# Start a simple HTTP server for Koyeb health check
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+def run_health_server():
+    server = HTTPServer(('0.0.0.0', 8080), HealthCheckHandler)
+    server.serve_forever()
+
+threading.Thread(target=run_health_server, daemon=True).start()
 
 # Force Sub Check (link-based, not channel ID)
 async def is_user_joined(client, user_id):
