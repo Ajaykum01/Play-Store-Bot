@@ -19,7 +19,6 @@ users_collection = db["users"]
 
 ADMINS = [int(i) for i in os.getenv("ADMINS", "2117119246").split()]
 
-# Telegram Bot setup
 Bot = Client(
     "Play-Store-Bot",
     bot_token=os.environ["BOT_TOKEN"],
@@ -34,14 +33,23 @@ FORCE_SUB_LINKS = [
     "https://t.me/+A0LsNrMLyX8yOGM1",
 ]
 
+FORCE_SUB_CHAT_IDS = []
+
+async def resolve_all_invites():
+    for link in FORCE_SUB_LINKS:
+        try:
+            chat = await Bot.resolve_invite_link(link)
+            FORCE_SUB_CHAT_IDS.append(chat.chat.id)
+        except Exception as e:
+            print(f"Failed to resolve {link}: {e}")
+
 def generate_random_hash():
     return ''.join(random.choices(string.hexdigits.lower(), k=64))
 
 async def is_user_subscribed(bot, user_id):
-    for link in FORCE_SUB_LINKS:
+    for chat_id in FORCE_SUB_CHAT_IDS:
         try:
-            chat = await bot.get_chat(link)
-            member = await bot.get_chat_member(chat.id, user_id)
+            member = await bot.get_chat_member(chat_id, user_id)
             if member.status in ("left", "kicked"):
                 return False
         except:
@@ -134,20 +142,29 @@ async def broadcast(bot, message):
             continue
     await message.reply(f"Broadcast sent to {count} users.")
 
-# Health check server to prevent Koyeb sleep
+# Health check server for Koyeb
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-type", "text/plain")
         self.end_headers()
-        self.wfile.write(b"Bot is Alive!")
+        self.wfile.write(b"OK")
 
 def run_server():
     server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
     server.serve_forever()
 
-# Start health check server in background
+# Start background server
 threading.Thread(target=run_server).start()
 
-# Run the bot
-Bot.run()
+# Run bot
+async def main():
+    await resolve_all_invites()
+    await Bot.start()
+    await idle()
+    await Bot.stop()
+
+if __name__ == "__main__":
+    import asyncio
+    from pyrogram import idle
+    asyncio.run(main())
