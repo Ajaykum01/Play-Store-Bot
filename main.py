@@ -41,13 +41,12 @@ def generate_random_hash():
 async def is_user_joined(bot, user_id):
     for link in FORCE_SUB_LINKS:
         try:
-            chat = await bot.get_chat(link)
+            invite_hash = link.split("+", 1)[-1]
+            chat = await bot.get_chat(f"https://t.me/+{invite_hash}")
             member = await bot.get_chat_member(chat.id, user_id)
             if member.status not in ("member", "administrator", "creator"):
                 return False
-        except UserNotParticipant:
-            return False
-        except Exception:
+        except:
             return False
     return True
 
