@@ -20,12 +20,19 @@ FORCE_SUB_IDS = [
     int(os.environ.get("FORCE_SUB4_ID", 0)),
 ]
 
+FORCE_SUB_LINKS = [
+    os.environ.get("FORCE_SUB_LINK1"),
+    os.environ.get("FORCE_SUB_LINK2"),
+    os.environ.get("FORCE_SUB_LINK3"),
+    os.environ.get("FORCE_SUB_LINK4"),
+]
+
 ADMINS = [int(x) for x in os.environ.get("ADMINS", "").split()]
 Bot = Client("biisal-bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 logging.basicConfig(level=logging.INFO)
 
-# Health check server for Koyeb
+# Health check for Koyeb
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -42,7 +49,7 @@ def run_health_server():
 
 threading.Thread(target=run_health_server, daemon=True).start()
 
-# Final fixed force sub check using only channel IDs
+# Force Sub using Channel IDs
 async def is_user_joined(client, user_id):
     for chat_id in FORCE_SUB_IDS:
         if not chat_id:
@@ -54,7 +61,7 @@ async def is_user_joined(client, user_id):
         except UserNotParticipant:
             return False
         except PeerIdInvalid:
-            logging.warning(f"Invalid channel ID: {chat_id}. Check if bot is admin.")
+            logging.warning(f"Invalid channel ID: {chat_id}. Make sure bot is admin.")
             return False
         except Exception as e:
             logging.warning(f"Error checking subscription for channel {chat_id}: {e}")
@@ -73,11 +80,15 @@ async def start_handler(client, message):
             ])
         )
     else:
+        buttons = [
+            [InlineKeyboardButton(f"Join Channel {i+1}", url=link)]
+            for i, link in enumerate(FORCE_SUB_LINKS) if link
+        ]
+        buttons.append([InlineKeyboardButton("✅ Joined All", callback_data="check_force_sub")])
+
         await message.reply_text(
-            "**Please join all required channels to use this bot. After joining, press the button below.**",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("✅ Joined All", callback_data="check_force_sub")]
-            ])
+            "**Please join all the channels below to use this bot:**",
+            reply_markup=InlineKeyboardMarkup(buttons)
         )
 
 @Bot.on_callback_query(filters.regex("check_force_sub"))
