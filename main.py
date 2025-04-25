@@ -149,14 +149,5 @@ def run_server():
 # Start health check server in background
 threading.Thread(target=run_server).start()
 
-# Notify admins on bot startup
-@Bot.on_start()
-async def notify_admins(client):
-    for admin in ADMINS:
-        try:
-            await client.send_message(admin, "✅ Bot is Alive and Running!")
-        except:
-            pass
-
 # Run the bot
 Bot.run()
