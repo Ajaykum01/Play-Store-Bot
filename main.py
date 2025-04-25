@@ -4,7 +4,7 @@ import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.errors import UserNotParticipant
+from pyrogram.errors import UserNotParticipant, PeerIdInvalid
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,13 +12,6 @@ load_dotenv()
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-
-FORCE_SUB_LINKS = [
-    os.environ.get("FORCE_SUB_LINK1"),
-    os.environ.get("FORCE_SUB_LINK2"),
-    os.environ.get("FORCE_SUB_LINK3"),
-    os.environ.get("FORCE_SUB_LINK4"),
-]
 
 FORCE_SUB_IDS = [
     int(os.environ.get("FORCE_SUB1_ID", 0)),
@@ -39,13 +32,17 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"OK")
 
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
+
 def run_health_server():
     server = HTTPServer(('0.0.0.0', 8080), HealthCheckHandler)
     server.serve_forever()
 
 threading.Thread(target=run_health_server, daemon=True).start()
 
-# Force subscription check using channel IDs
+# Final fixed force sub check using only channel IDs
 async def is_user_joined(client, user_id):
     for chat_id in FORCE_SUB_IDS:
         if not chat_id:
@@ -56,8 +53,11 @@ async def is_user_joined(client, user_id):
                 return False
         except UserNotParticipant:
             return False
+        except PeerIdInvalid:
+            logging.warning(f"Invalid channel ID: {chat_id}. Check if bot is admin.")
+            return False
         except Exception as e:
-            logging.warning(f"Error checking user subscription: {e}")
+            logging.warning(f"Error checking subscription for channel {chat_id}: {e}")
             return False
     return True
 
@@ -73,13 +73,11 @@ async def start_handler(client, message):
             ])
         )
     else:
-        buttons = [[InlineKeyboardButton(f"Join Channel {i+1}", url=link)]
-                   for i, link in enumerate(FORCE_SUB_LINKS) if link]
-        buttons.append([InlineKeyboardButton("✅ Joined All", callback_data="check_force_sub")])
-
         await message.reply_text(
-            "**Please join all the channels below to use this bot:**",
-            reply_markup=InlineKeyboardMarkup(buttons)
+            "**Please join all required channels to use this bot. After joining, press the button below.**",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Joined All", callback_data="check_force_sub")]
+            ])
         )
 
 @Bot.on_callback_query(filters.regex("check_force_sub"))
@@ -88,7 +86,7 @@ async def verify_handler(client, query):
     if await is_user_joined(client, user_id):
         await query.message.edit("✅ Thank you! You’re now verified.")
     else:
-        await query.answer("❗ Please join all required channels first.", show_alert=True)
+        await query.answer("❗ You haven't joined all channels yet. Please double-check.", show_alert=True)
 
 @Bot.on_callback_query(filters.regex("do_action"))
 async def do_action(client, query):
