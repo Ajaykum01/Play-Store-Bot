@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MongoDB setup
+# MongoDB setup
 
 MONGO_URL = os.getenv("MONGO_URL")
 client = MongoClient(MONGO_URL)
@@ -27,7 +27,7 @@ api_id=int(os.environ["API_ID"]),
 api_hash=os.environ["API_HASH"]
 )
 
-Replace with actual private channel chat IDs
+# Replace with actual private channel chat IDs
 
 FORCE_SUB_CHAT_IDS = [
 -1002211067746,
@@ -36,7 +36,7 @@ FORCE_SUB_CHAT_IDS = [
 -1002096500701
 ]
 
-Corresponding invite links for UI
+# Corresponding invite links for UI
 
 FORCE_SUB_LINKS = [
 "https://t.me/+27yPnr6aQYo2NDE1",
@@ -142,7 +142,7 @@ except:
 continue
 await message.reply(f"Broadcast sent to {count} users.")
 
-Health check server to prevent Koyeb sleep
+# Health check server to prevent Koyeb sleep
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
 def do_GET(self):
@@ -155,11 +155,11 @@ def run_server():
 server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
 server.serve_forever()
 
-Start health check server in background
+# Start health check server in background
 
 threading.Thread(target=run_server).start()
 
-Run the bot
+# Run the bot
 
 Bot.run()
 
