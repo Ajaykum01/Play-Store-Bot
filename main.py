@@ -20,12 +20,19 @@ FORCE_SUB_LINKS = [
     os.environ.get("FORCE_SUB_LINK4"),
 ]
 
+FORCE_SUB_IDS = [
+    int(os.environ.get("FORCE_SUB1_ID", 0)),
+    int(os.environ.get("FORCE_SUB2_ID", 0)),
+    int(os.environ.get("FORCE_SUB3_ID", 0)),
+    int(os.environ.get("FORCE_SUB4_ID", 0)),
+]
+
 ADMINS = [int(x) for x in os.environ.get("ADMINS", "").split()]
 Bot = Client("biisal-bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 logging.basicConfig(level=logging.INFO)
 
-# Start a simple HTTP server for Koyeb health check
+# Health check server for Koyeb
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -38,15 +45,13 @@ def run_health_server():
 
 threading.Thread(target=run_health_server, daemon=True).start()
 
-# Force Sub Check (link-based, not channel ID)
+# Force subscription check using channel IDs
 async def is_user_joined(client, user_id):
-    for link in FORCE_SUB_LINKS:
-        if not link:
+    for chat_id in FORCE_SUB_IDS:
+        if not chat_id:
             continue
         try:
-            invite_hash = link.split("+")[1]
-            chat = await client.join_chat(f"https://t.me/+{invite_hash}")  # get Chat object
-            member = await client.get_chat_member(chat.id, user_id)
+            member = await client.get_chat_member(chat_id, user_id)
             if member.status not in ("member", "administrator", "creator"):
                 return False
         except UserNotParticipant:
@@ -85,7 +90,6 @@ async def verify_handler(client, query):
     else:
         await query.answer("❗ Please join all required channels first.", show_alert=True)
 
-# Optional example callback
 @Bot.on_callback_query(filters.regex("do_action"))
 async def do_action(client, query):
     await query.answer("This is just an example button.")
