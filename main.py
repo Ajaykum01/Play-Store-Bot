@@ -26,24 +26,21 @@ Bot = Client(
     api_hash=os.environ["API_HASH"]
 )
 
-# Private channel invite links
+# Replace with actual private channel chat IDs
+FORCE_SUB_CHAT_IDS = [
+    -1001234567890,
+    -1009876543210,
+    -1001122334455,
+    -1005566778899
+]
+
+# Corresponding invite links for UI
 FORCE_SUB_LINKS = [
     "https://t.me/+27yPnr6aQYo2NDE1",
     "https://t.me/+udIcxtizerAwOTRl",
     "https://t.me/+np4is6JZyyY3MTg1",
-    "https://t.me/+A0LsNrMLyX8yOGM1",
+    "https://t.me/+A0LsNrMLyX8yOGM1"
 ]
-
-FORCE_SUB_CHAT_IDS = []
-
-# Resolve links to get actual chat IDs
-async def resolve_all_invites():
-    for link in FORCE_SUB_LINKS:
-        try:
-            chat = await Bot.join_chat(link)
-            FORCE_SUB_CHAT_IDS.append(chat.id)
-        except Exception as e:
-            print(f"Failed to resolve {link}: {e}")
 
 async def is_user_subscribed(bot, user_id):
     for chat_id in FORCE_SUB_CHAT_IDS:
@@ -69,7 +66,6 @@ async def start(bot, message):
         buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
         return await message.reply("**JOIN GIVEN CHANNELS TO GET REDEEM CODE**", reply_markup=InlineKeyboardMarkup(buttons))
 
-    # Already verified
     await message.reply(
         "📚 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 👾",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
@@ -158,7 +154,5 @@ def run_server():
 # Start health check server in background
 threading.Thread(target=run_server).start()
 
-# Resolve private invite links at startup
-Bot.start()
-Bot.loop.run_until_complete(resolve_all_invites())
+# Run the bot
 Bot.run()
