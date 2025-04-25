@@ -37,34 +37,62 @@ FORCE_SUB_LINKS = [
 def generate_random_hash():
     return ''.join(random.choices(string.hexdigits.lower(), k=64))
 
+async def is_user_subscribed(bot, user_id):
+    for link in FORCE_SUB_LINKS:
+        try:
+            chat = await bot.get_chat(link)
+            member = await bot.get_chat_member(chat.id, user_id)
+            if member.status in ("left", "kicked"):
+                return False
+        except:
+            return False
+    return True
+
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(bot, message):
     user_id = message.from_user.id
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
 
-    buttons = [[InlineKeyboardButton("JoinðŸ“£", url=url)] for url in FORCE_SUB_LINKS]
-    buttons.append([InlineKeyboardButton("Verifyâœ…", callback_data="verify")])
-    reply_markup = InlineKeyboardMarkup(buttons)
-    await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
+    if not await is_user_subscribed(bot, user_id):
+        buttons = [[InlineKeyboardButton("Join📣", url=url)] for url in FORCE_SUB_LINKS]
+        buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
+        reply_markup = InlineKeyboardMarkup(buttons)
+        return await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
+
+    await message.reply(
+        "📗 Welcome back! Click below to generate your code.",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
+    )
 
 @Bot.on_callback_query(filters.regex("verify"))
 async def verify_channels(bot, query):
+    user_id = query.from_user.id
+    if not await is_user_subscribed(bot, user_id):
+        return await query.answer("You're still not subscribed to all channels.", show_alert=True)
+
     await query.message.delete()
     await query.message.reply(
-        "ðŸ“— Welcome to NST free Google Play Redeem Code Bot RS30-200\nðŸ˜ Click On Generate Code ðŸ‘¾",
+        "📗 Verified! Click below to generate your code.",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
 @Bot.on_callback_query(filters.regex("gen_code"))
 async def generate_code(bot, query):
+    user_id = query.from_user.id
+    if not await is_user_subscribed(bot, user_id):
+        buttons = [[InlineKeyboardButton("Join📣", url=url)] for url in FORCE_SUB_LINKS]
+        buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
+        reply_markup = InlineKeyboardMarkup(buttons)
+        return await query.message.reply("**You left a required channel. Please rejoin to use the bot.**", reply_markup=reply_markup)
+
     config = config_collection.find_one({"_id": "config"}) or {}
     url = config.get("redeem_url", "https://modijiurl.com")
     hash_code = generate_random_hash()
     image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
-        "**Your Redeem Code Generated successfullyâœ… IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
+        "**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
         f"`hash:` `{hash_code}`\n"
         f"**Code :** `{url}`"
     )
@@ -120,6 +148,15 @@ def run_server():
 
 # Start health check server in background
 threading.Thread(target=run_server).start()
+
+# Notify admins on bot startup
+@Bot.on_start()
+async def notify_admins(client):
+    for admin in ADMINS:
+        try:
+            await client.send_message(admin, "✅ Bot is Alive and Running!")
+        except:
+            pass
 
 # Run the bot
 Bot.run()
