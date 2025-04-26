@@ -2,6 +2,8 @@ import os
 import threading
 import random
 import string
+import asyncio
+import aiohttp
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
 from pyrogram.types import *
@@ -36,25 +38,30 @@ FORCE_SUB_LINKS = [
     "https://t.me/+A0LsNrMLyX8yOGM1",
 ]
 
+# Global cache for time links
+time_links_cache = {}
+
+def load_time_links():
+    global time_links_cache
+    config = config_collection.find_one({"_id": "time_links"}) or {}
+    time_links_cache = config.get("links", {}) or {}
+
 def generate_random_hash():
     return ''.join(random.choices(string.hexdigits.lower(), k=64))
 
 def get_current_link():
-    config = config_collection.find_one({"_id": "time_links"}) or {}
-    time_links = config.get("links", {})
+    if not time_links_cache:
+        load_time_links()
 
-    # Get current IST time
     ist = pytz.timezone('Asia/Kolkata')
     now = datetime.now(ist)
     current_time = now.strftime("%I:%M%p").lstrip("0").lower()
     current_hour = now.strftime("%I%p").lstrip("0").lower()
 
-    # Exact match first (like 6:10am)
-    if current_time in time_links:
-        return time_links[current_time]
-    # Fallback to hour match (like 6am)
-    elif current_hour in time_links:
-        return time_links[current_hour]
+    if current_time in time_links_cache:
+        return time_links_cache[current_time]
+    elif current_hour in time_links_cache:
+        return time_links_cache[current_hour]
     else:
         return "https://modijiurl.com"
 
@@ -117,8 +124,8 @@ async def set_time_links(bot, message):
             time_str = time_str.lower()
             new_links[time_str] = url
 
-        # Overwrite old links
         config_collection.update_one({"_id": "time_links"}, {"$set": {"links": new_links}}, upsert=True)
+        load_time_links()
         await message.reply(f"✅ Time links updated successfully!\n\nTotal {len(new_links)} timings set.")
     except Exception as e:
         await message.reply("Usage:\n/time\n6:00am https://link1.com\n6:30am https://link2.com")
@@ -149,7 +156,7 @@ async def broadcast(bot, message):
             continue
     await message.reply(f"Broadcast sent to {count} users.")
 
-# Health check server to prevent Koyeb sleep
+# Health check server
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -161,8 +168,19 @@ def run_server():
     server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
     server.serve_forever()
 
-# Start health check server in background
-threading.Thread(target=run_server).start()
+async def auto_ping():
+    await Bot.start()
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                await session.get("https://your-koyeb-app-name.koyeb.app/")
+        except:
+            pass
+        await asyncio.sleep(300)  # Ping every 5 minutes
 
-# Run the bot
-Bot.run()
+if __name__ == "__main__":
+    threading.Thread(target=run_server, daemon=True).start()
+    load_time_links()
+    loop = asyncio.get_event_loop()
+    loop.create_task(auto_ping())
+    Bot.run()
