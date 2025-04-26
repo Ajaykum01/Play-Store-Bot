@@ -88,7 +88,7 @@ async def generate_code(bot, query):
         photo=image_url,
         caption=caption,
         reply_markup=buttons,
-        parse_mode="markdown"
+        parse_mode="Markdown"
     )
 
     await query.answer()
