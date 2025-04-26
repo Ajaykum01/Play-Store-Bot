@@ -2,13 +2,13 @@ import os
 import threading
 import random
 import string
+import datetime
+import pytz
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
 from pyrogram.types import *
 from pymongo import MongoClient
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
-import pytz
 
 load_dotenv()
 
@@ -45,42 +45,38 @@ async def start(bot, message):
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
 
-    buttons = [[InlineKeyboardButton("Join❤️", url=url)] for url in FORCE_SUB_LINKS]
+    buttons = [[InlineKeyboardButton("Join📢", url=url)] for url in FORCE_SUB_LINKS]
     buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
     reply_markup = InlineKeyboardMarkup(buttons)
-    await message.reply("**MUST JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
+    await message.reply("**JOIN GIVEN CHANNELS TO GET REDEEM CODE**", reply_markup=reply_markup)
 
 @Bot.on_callback_query(filters.regex("verify"))
 async def verify_channels(bot, query):
     await query.message.delete()
     await query.message.reply(
-        "📚 Welcome to NST free Google Play Redeem Code Bot RS30-200😍 Click On Generate Code 💾 ",
+        "📚 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 💾",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
 @Bot.on_callback_query(filters.regex("gen_code"))
 async def generate_code(bot, query):
-    # Get current IST hour
-    ist = pytz.timezone('Asia/Kolkata')
-    now = datetime.now(ist)
-    current_time = now.strftime("%-I:%M%p").lower()  # Example: 6:30am
+    config = config_collection.find_one({"_id": "config"}) or {}
 
-    config = config_collection.find_one({"_id": "time_config"}) or {}
-    url = config.get(current_time)
+    # Get current IST time
+    ist = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+    current_time_key = ist.strftime("%-I%p").lower()      # eg: "6am"
+    current_time_full_key = ist.strftime("%-I:%M%p").lower()  # eg: "6:10am"
 
-    # If exact time not found, try without minutes (only hour based)
-    if not url:
-        current_hour_only = now.strftime("%-I%p").lower()  # Example: 6am
-        url = config.get(current_hour_only)
+    times_links = config.get("times_links", {})
 
-    if not url:
-        url = config_collection.find_one({"_id": "config"}).get("redeem_url", "https://modijiurl.com")
+    # Find matching link
+    url = times_links.get(current_time_full_key) or times_links.get(current_time_key) or config.get("redeem_url", "https://modijiurl.com")
 
     hash_code = generate_random_hash()
     image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
-        "**Your Redeem Code Generated successfully✅ GET EVERY NEW CODES AT 1HOURS ♥️ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
+        "**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
         f"`hash:` `{hash_code}`\n"
         f"**Code :** `{url}`"
     )
@@ -104,7 +100,25 @@ async def set_link(bot, message):
         return await message.reply("Usage: /setlink <url>")
     url = message.text.split(None, 1)[1]
     config_collection.update_one({"_id": "config"}, {"$set": {"redeem_url": url}}, upsert=True)
-    await message.reply("Redeem link updated successfully.")
+    await message.reply("Default redeem link updated successfully.")
+
+@Bot.on_message(filters.command("time") & filters.private)
+async def set_time_link(bot, message):
+    if message.from_user.id not in ADMINS:
+        return await message.reply("You are not authorized to use this command.")
+    if len(message.text.split()) < 3:
+        return await message.reply("Usage: /time <time> <url>\nExample: `/time 6am https://example.com/6am`", quote=True)
+
+    _, time_text, url = message.text.split(maxsplit=2)
+    time_text = time_text.lower()
+
+    # Save time-based link into MongoDB
+    config = config_collection.find_one({"_id": "config"}) or {}
+    times_links = config.get("times_links", {})
+    times_links[time_text] = url
+    config_collection.update_one({"_id": "config"}, {"$set": {"times_links": times_links}}, upsert=True)
+
+    await message.reply(f"Successfully set link for **{time_text}** as:\n{url}")
 
 @Bot.on_message(filters.command("broadcast") & filters.private)
 async def broadcast(bot, message):
@@ -121,46 +135,6 @@ async def broadcast(bot, message):
         except:
             continue
     await message.reply(f"Broadcast sent to {count} users.")
-
-# New /time command
-@Bot.on_message(filters.command("time") & filters.private)
-async def set_time_links(bot, message):
-    if message.from_user.id not in ADMINS:
-        return await message.reply("You are not authorized to use this command.")
-    
-    if len(message.text.splitlines()) < 2:
-        return await message.reply(
-            "Usage:\n`/time`\n`6am: https://link1`\n`6:30am: https://link2`\n`7am: https://link3`",
-            quote=True
-        )
-    
-    try:
-        lines = message.text.splitlines()
-        updates = {}
-        
-        for line in lines[1:]:
-            if ':' not in line:
-                continue
-            time_part, url_part = line.split(':', 1)
-            hour_key = time_part.strip().lower()
-            url = url_part.strip()
-            if hour_key and url:
-                updates[hour_key] = url
-        
-        if not updates:
-            return await message.reply("No valid time-link pairs found.", quote=True)
-
-        config_collection.update_one(
-            {"_id": "time_config"},
-            {"$set": updates},
-            upsert=True
-        )
-        await message.reply(
-            f"Successfully updated {len(updates)} time-based links.",
-            quote=True
-        )
-    except Exception as e:
-        await message.reply(f"Error: {e}", quote=True)
 
 # Health check server to prevent Koyeb sleep
 class HealthCheckHandler(BaseHTTPRequestHandler):
