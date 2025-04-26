@@ -53,7 +53,7 @@ async def start(bot, message):
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
 
-    buttons = [[InlineKeyboardButton("JoinðŸ“£", url=url)] for url in FORCE_SUB_LINKS]
+    buttons = [[InlineKeyboardButton("Join📢", url=url)] for url in FORCE_SUB_LINKS]
     buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
@@ -70,7 +70,7 @@ async def verify_channels(bot, query):
 async def generate_code(bot, query):
     url = get_current_redeem_link() or "https://modijiurl.com"
     hash_code = generate_random_hash()
-    image_url = "https://envs.sh/CCn.jpg"
+    image_url = "https://graph.org/file/2a8e7486b26532bfa9fcb.jpg"  # Updated image
 
     caption = (
         "**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
