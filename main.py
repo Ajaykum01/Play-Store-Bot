@@ -7,7 +7,8 @@ from pyrogram import Client, filters
 from pyrogram.types import *
 from pymongo import MongoClient
 from dotenv import load_dotenv
-from datetime import datetime, timedelta  # Added for time-based link
+from datetime import datetime, timedelta
+import pytz
 
 load_dotenv()
 
@@ -59,8 +60,22 @@ async def verify_channels(bot, query):
 
 @Bot.on_callback_query(filters.regex("gen_code"))
 async def generate_code(bot, query):
-    config = config_collection.find_one({"_id": "config"}) or {}
-    url = config.get("redeem_url", "https://modijiurl.com")
+    # Get current IST hour
+    ist = pytz.timezone('Asia/Kolkata')
+    now = datetime.now(ist)
+    current_time = now.strftime("%-I:%M%p").lower()  # Example: 6:30am
+
+    config = config_collection.find_one({"_id": "time_config"}) or {}
+    url = config.get(current_time)
+
+    # If exact time not found, try without minutes (only hour based)
+    if not url:
+        current_hour_only = now.strftime("%-I%p").lower()  # Example: 6am
+        url = config.get(current_hour_only)
+
+    if not url:
+        url = config_collection.find_one({"_id": "config"}).get("redeem_url", "https://modijiurl.com")
+
     hash_code = generate_random_hash()
     image_url = "https://envs.sh/CCn.jpg"
 
@@ -107,25 +122,43 @@ async def broadcast(bot, message):
             continue
     await message.reply(f"Broadcast sent to {count} users.")
 
-# New command /time added here
+# New /time command
 @Bot.on_message(filters.command("time") & filters.private)
 async def set_time_links(bot, message):
     if message.from_user.id not in ADMINS:
         return await message.reply("You are not authorized to use this command.")
-    if len(message.command) < 2:
-        return await message.reply("Usage: /time <hour> <url>\n\nExample: `/time 6am https://link.com/6am`", quote=True)
+    
+    if len(message.text.splitlines()) < 2:
+        return await message.reply(
+            "Usage:\n`/time`\n`6am: https://link1`\n`6:30am: https://link2`\n`7am: https://link3`",
+            quote=True
+        )
+    
     try:
-        parts = message.text.split(None, 2)
-        if len(parts) < 3:
-            return await message.reply("Usage: /time <hour> <url>\n\nExample: `/time 6am https://link.com/6am`", quote=True)
-        hour_key = parts[1].lower()  # like 6am, 6:30pm
-        url = parts[2]
+        lines = message.text.splitlines()
+        updates = {}
+        
+        for line in lines[1:]:
+            if ':' not in line:
+                continue
+            time_part, url_part = line.split(':', 1)
+            hour_key = time_part.strip().lower()
+            url = url_part.strip()
+            if hour_key and url:
+                updates[hour_key] = url
+        
+        if not updates:
+            return await message.reply("No valid time-link pairs found.", quote=True)
+
         config_collection.update_one(
             {"_id": "time_config"},
-            {"$set": {hour_key: url}},
+            {"$set": updates},
             upsert=True
         )
-        await message.reply(f"Time-based link for `{hour_key}` updated successfully.", quote=True)
+        await message.reply(
+            f"Successfully updated {len(updates)} time-based links.",
+            quote=True
+        )
     except Exception as e:
         await message.reply(f"Error: {e}", quote=True)
 
