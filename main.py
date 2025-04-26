@@ -71,10 +71,10 @@ async def generate_code(bot, query):
     url = times_links.get(current_time_full_key) or times_links.get(current_time_key) or config.get("redeem_url", "https://modijiurl.com")
 
     hash_code = generate_random_hash()
-    image_url = "https://envs.sh/CCn.jpg"
+    image_url = "https://graph.org/file/2a8e7486b26532bfa9fcb.jpg"
 
     caption = (
-        "**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
+        "**Your Redeem Code Generated successfully✅ EVERY 1 HOURS NEW REDEEM CODES WII GIVE ♥️ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
         f"`hash:` `{hash_code}`\n"
         f"**Code :** [Click Here]({url})"
     )
