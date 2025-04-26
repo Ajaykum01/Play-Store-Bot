@@ -53,7 +53,7 @@ async def start(bot, message):
 async def verify_channels(bot, query):
     await query.message.delete()
     await query.message.reply(
-        "ðŸ“— Welcome to NST free Google Play Redeem Code Bot RS30-200\nðŸ˜ Click On Generate Code ðŸ‘¾",
+        "📚 Welcome to NST free Google Play Redeem Code Bot RS30-200😍 Click On Generate Code 💾 ",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
@@ -65,7 +65,7 @@ async def generate_code(bot, query):
     image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
-        "**Your Redeem Code Generated successfullyâœ… IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
+        "**Your Redeem Code Generated successfully✅ GET EVERY NEW CODES AT 1HOURS ♥️ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
         f"`hash:` `{hash_code}`\n"
         f"**Code :** `{url}`"
     )
