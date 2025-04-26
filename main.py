@@ -173,7 +173,7 @@ async def auto_ping():
     while True:
         try:
             async with aiohttp.ClientSession() as session:
-                await session.get("https://your-koyeb-app-name.koyeb.app/")
+                await session.get("https://jittery-merna-agnalagnal4-8c1a65b0.koyeb.app/")
         except:
             pass
         await asyncio.sleep(300)  # Ping every 5 minutes
