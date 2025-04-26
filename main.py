@@ -62,14 +62,12 @@ async def verify_channels(bot, query):
 async def generate_code(bot, query):
     config = config_collection.find_one({"_id": "config"}) or {}
 
-    # Get current IST time
     ist = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
-    current_time_key = ist.strftime("%-I%p").lower()      # eg: "6am"
-    current_time_full_key = ist.strftime("%-I:%M%p").lower()  # eg: "6:10am"
+    current_time_key = ist.strftime("%-I%p").lower()      
+    current_time_full_key = ist.strftime("%-I:%M%p").lower()
 
     times_links = config.get("times_links", {})
 
-    # Find matching link
     url = times_links.get(current_time_full_key) or times_links.get(current_time_key) or config.get("redeem_url", "https://modijiurl.com")
 
     hash_code = generate_random_hash()
@@ -78,7 +76,7 @@ async def generate_code(bot, query):
     caption = (
         "**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
         f"`hash:` `{hash_code}`\n"
-        f"**Code :** `{url}`"
+        f"**Code :** [Click Here]({url})"
     )
 
     buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
@@ -87,7 +85,9 @@ async def generate_code(bot, query):
         chat_id=query.message.chat.id,
         photo=image_url,
         caption=caption,
-        reply_markup=buttons
+        reply_markup=buttons,
+        parse_mode="markdown",
+        disable_web_page_preview=False
     )
 
     await query.answer()
@@ -112,13 +112,43 @@ async def set_time_link(bot, message):
     _, time_text, url = message.text.split(maxsplit=2)
     time_text = time_text.lower()
 
-    # Save time-based link into MongoDB
     config = config_collection.find_one({"_id": "config"}) or {}
     times_links = config.get("times_links", {})
     times_links[time_text] = url
     config_collection.update_one({"_id": "config"}, {"$set": {"times_links": times_links}}, upsert=True)
 
     await message.reply(f"Successfully set link for **{time_text}** as:\n{url}")
+
+@Bot.on_message(filters.command("getlink") & filters.private)
+async def get_links(bot, message):
+    if message.from_user.id not in ADMINS:
+        return await message.reply("You are not authorized to use this command.")
+    config = config_collection.find_one({"_id": "config"}) or {}
+    times_links = config.get("times_links", {})
+
+    if not times_links:
+        return await message.reply("No time-based links set yet.")
+
+    links_list = "\n".join([f"**{time}** ➔ {url}" for time, url in times_links.items()])
+    await message.reply(f"**Saved Time-Based Links:**\n\n{links_list}")
+
+@Bot.on_message(filters.command("dellink") & filters.private)
+async def delete_link(bot, message):
+    if message.from_user.id not in ADMINS:
+        return await message.reply("You are not authorized to use this command.")
+    if len(message.text.split()) < 2:
+        return await message.reply("Usage: /dellink <time>")
+    time_text = message.text.split(None, 1)[1].lower()
+
+    config = config_collection.find_one({"_id": "config"}) or {}
+    times_links = config.get("times_links", {})
+
+    if time_text not in times_links:
+        return await message.reply(f"No link found for time: {time_text}")
+
+    del times_links[time_text]
+    config_collection.update_one({"_id": "config"}, {"$set": {"times_links": times_links}})
+    await message.reply(f"Successfully deleted link for time: **{time_text}**")
 
 @Bot.on_message(filters.command("broadcast") & filters.private)
 async def broadcast(bot, message):
@@ -135,6 +165,13 @@ async def broadcast(bot, message):
         except:
             continue
     await message.reply(f"Broadcast sent to {count} users.")
+
+@Bot.on_message(filters.command("help") & filters.private)
+async def help_command(bot, message):
+    await message.reply(
+        "**CONTACT BOT OWNER AT INSTAGRAM [Naruto_shippuden_tamill](https://www.instagram.com/Naruto_shippuden_tamill)**",
+        disable_web_page_preview=True
+    )
 
 # Health check server to prevent Koyeb sleep
 class HealthCheckHandler(BaseHTTPRequestHandler):
