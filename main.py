@@ -78,7 +78,7 @@ async def generate_code(bot, query):
     caption = (
         "**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
         f"`hash:` `{hash_code}`\n"
-        f"**Code :** `{url}`"
+        f"**Code :** [Click Here]({url})"
     )
 
     buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
@@ -87,7 +87,8 @@ async def generate_code(bot, query):
         chat_id=query.message.chat.id,
         photo=image_url,
         caption=caption,
-        reply_markup=buttons
+        reply_markup=buttons,
+        parse_mode="markdown"
     )
 
     await query.answer()
