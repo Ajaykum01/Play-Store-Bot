@@ -45,7 +45,7 @@ async def start(bot, message):
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
 
-    buttons = [[InlineKeyboardButton("Join📢", url=url)] for url in FORCE_SUB_LINKS]
+    buttons = [[InlineKeyboardButton("Join❤️", url=url)] for url in FORCE_SUB_LINKS]
     buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply("**JOIN GIVEN CHANNELS TO GET REDEEM CODE**", reply_markup=reply_markup)
@@ -54,7 +54,7 @@ async def start(bot, message):
 async def verify_channels(bot, query):
     await query.message.delete()
     await query.message.reply(
-        "📚 Welcome to NST free Google Play Redeem Code Bot RS30-200\n😍 Click On Generate Code 💾",
+        "ðŸ“š Welcome to NST free Google Play Redeem Code Bot RS30-200\nðŸ˜ Click On Generate Code ðŸ’¾",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
@@ -76,9 +76,9 @@ async def generate_code(bot, query):
     image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
-        "**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
+        "**Your Redeem Code Generated successfully✅ YOU CAN GET FREE CODES EVERY 1 HOURS 💕 IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
         f"`hash:` `{hash_code}`\n"
-        f"**Code :** [Click Here]({url})"
+        f"**Code :** `{url}`"
     )
 
     buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
@@ -87,8 +87,7 @@ async def generate_code(bot, query):
         chat_id=query.message.chat.id,
         photo=image_url,
         caption=caption,
-        reply_markup=buttons,
-        parse_mode="html"
+        reply_markup=buttons
     )
 
     await query.answer()
