@@ -2,8 +2,7 @@ import os
 import threading
 import random
 import string
-import datetime
-import pytz
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
 from pyrogram.types import *
@@ -39,16 +38,25 @@ FORCE_SUB_LINKS = [
 def generate_random_hash():
     return ''.join(random.choices(string.hexdigits.lower(), k=64))
 
+def get_current_redeem_link():
+    now = datetime.now()
+    current_hour = now.strftime("%-I%p").lower()  # like 6am, 7pm
+    current_minute = now.strftime("%M")
+    if current_minute != "00":
+        current_hour = now.strftime("%-I:%M%p").lower()  # like 6:10am
+    config = config_collection.find_one({"_id": "time_config"}) or {}
+    return config.get(current_hour)
+
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(bot, message):
     user_id = message.from_user.id
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
 
-    buttons = [[InlineKeyboardButton("Join📢", url=url)] for url in FORCE_SUB_LINKS]
+    buttons = [[InlineKeyboardButton("JoinðŸ“£", url=url)] for url in FORCE_SUB_LINKS]
     buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
     reply_markup = InlineKeyboardMarkup(buttons)
-    await message.reply("**JOIN GIVEN CHANNELS TO GET REDEEM CODE**", reply_markup=reply_markup)
+    await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
 
 @Bot.on_callback_query(filters.regex("verify"))
 async def verify_channels(bot, query):
@@ -60,15 +68,7 @@ async def verify_channels(bot, query):
 
 @Bot.on_callback_query(filters.regex("gen_code"))
 async def generate_code(bot, query):
-    config = config_collection.find_one({"_id": "config"}) or {}
-
-    ist = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
-    current_time_key = ist.strftime("%-I%p").lower()
-    current_time_full_key = ist.strftime("%-I:%M%p").lower()
-
-    times_links = config.get("times_links", {})
-    url = times_links.get(current_time_full_key) or times_links.get(current_time_key) or config.get("redeem_url", "https://modijiurl.com")
-
+    url = get_current_redeem_link() or "https://modijiurl.com"
     hash_code = generate_random_hash()
     image_url = "https://envs.sh/CCn.jpg"
 
@@ -84,8 +84,7 @@ async def generate_code(bot, query):
         chat_id=query.message.chat.id,
         photo=image_url,
         caption=caption,
-        reply_markup=buttons,
-        parse_mode="Markdown"  # <- FIXED HERE
+        reply_markup=buttons
     )
 
     await query.answer()
@@ -96,57 +95,29 @@ async def set_link(bot, message):
         return await message.reply("You are not authorized to use this command.")
     if len(message.command) < 2:
         return await message.reply("Usage: /setlink <url>")
+
     url = message.text.split(None, 1)[1]
     config_collection.update_one({"_id": "config"}, {"$set": {"redeem_url": url}}, upsert=True)
-    await message.reply("Default redeem link updated successfully.")
+    await message.reply("Redeem link updated successfully.")
 
 @Bot.on_message(filters.command("time") & filters.private)
-async def set_time_link(bot, message):
+async def set_time_links(bot, message):
     if message.from_user.id not in ADMINS:
         return await message.reply("You are not authorized to use this command.")
     if len(message.text.split()) < 3:
-        return await message.reply("Usage: /time <time> <url>\nExample: `/time 6am https://example.com/6am`", quote=True)
+        return await message.reply("Usage:\n/time <time> <url>\nExample: /time 6am https://example.com")
 
-    _, time_text, url = message.text.split(maxsplit=2)
-    time_text = time_text.lower()
+    time = message.text.split()[1].lower()
+    url = message.text.split()[2]
 
-    config = config_collection.find_one({"_id": "config"}) or {}
-    times_links = config.get("times_links", {})
-    times_links[time_text] = url
-    config_collection.update_one({"_id": "config"}, {"$set": {"times_links": times_links}}, upsert=True)
+    if not any(c.isdigit() for c in time) or ("am" not in time and "pm" not in time):
+        return await message.reply("Invalid time format. Example of valid time: 6am, 6:10am, 3pm etc.")
 
-    await message.reply(f"Successfully set link for **{time_text}** as:\n{url}")
+    config = config_collection.find_one({"_id": "time_config"}) or {}
+    config[time] = url
+    config_collection.update_one({"_id": "time_config"}, {"$set": config}, upsert=True)
 
-@Bot.on_message(filters.command("getlink") & filters.private)
-async def get_links(bot, message):
-    if message.from_user.id not in ADMINS:
-        return await message.reply("You are not authorized to use this command.")
-    config = config_collection.find_one({"_id": "config"}) or {}
-    times_links = config.get("times_links", {})
-
-    if not times_links:
-        return await message.reply("No time-based links set yet.")
-
-    links_list = "\n".join([f"**{time}** ➔ {url}" for time, url in times_links.items()])
-    await message.reply(f"**Saved Time-Based Links:**\n\n{links_list}")
-
-@Bot.on_message(filters.command("dellink") & filters.private)
-async def delete_link(bot, message):
-    if message.from_user.id not in ADMINS:
-        return await message.reply("You are not authorized to use this command.")
-    if len(message.text.split()) < 2:
-        return await message.reply("Usage: /dellink <time>")
-    time_text = message.text.split(None, 1)[1].lower()
-
-    config = config_collection.find_one({"_id": "config"}) or {}
-    times_links = config.get("times_links", {})
-
-    if time_text not in times_links:
-        return await message.reply(f"No link found for time: {time_text}")
-
-    del times_links[time_text]
-    config_collection.update_one({"_id": "config"}, {"$set": {"times_links": times_links}})
-    await message.reply(f"Successfully deleted link for time: **{time_text}**")
+    await message.reply(f"✅ Set URL for {time} successfully!")
 
 @Bot.on_message(filters.command("broadcast") & filters.private)
 async def broadcast(bot, message):
@@ -164,13 +135,6 @@ async def broadcast(bot, message):
             continue
     await message.reply(f"Broadcast sent to {count} users.")
 
-@Bot.on_message(filters.command("help") & filters.private)
-async def help_command(bot, message):
-    await message.reply(
-        "**CONTACT BOT OWNER AT INSTAGRAM [Naruto_shippuden_tamill](https://www.instagram.com/Naruto_shippuden_tamill)**",
-        disable_web_page_preview=True
-    )
-
 # Health check server to prevent Koyeb sleep
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -184,7 +148,7 @@ def run_server():
     server.serve_forever()
 
 # Start health check server in background
-threading.Thread(target=run_server, daemon=True).start()  # daemon=True to not block exit
+threading.Thread(target=run_server).start()
 
 # Run the bot
 Bot.run()
