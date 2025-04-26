@@ -64,8 +64,8 @@ async def start(bot, message):
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
 
-    buttons = [[InlineKeyboardButton("Join", url=url)] for url in FORCE_SUB_LINKS]
-    buttons.append([InlineKeyboardButton("Verify", callback_data="verify")])
+    buttons = [[InlineKeyboardButton("Join❤️", url=url)] for url in FORCE_SUB_LINKS]
+    buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
 
@@ -73,7 +73,7 @@ async def start(bot, message):
 async def verify_channels(bot, query):
     await query.message.delete()
     await query.message.reply(
-        "Welcome to NST free Google Play Redeem Code Bot RS30-200\nClick On Generate Code",
+        "🙏Welcome to NST free Google Play Redeem Code Bot RS30-200🪙\nClick On Generate Code",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
@@ -84,7 +84,7 @@ async def generate_code(bot, query):
     image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
-        "**Your Redeem Code Generated successfully\n\u2705 IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
+        "**Your Redeem Code Generated successfully✅\n\u2705 EVERY 1 HOURS YOU GET FREE CODES 💕 IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
         f"`hash:` `{hash_code}`\n"
         f"**Code :** `{link}`"
     )
@@ -101,24 +101,27 @@ async def generate_code(bot, query):
     await query.answer()
 
 @Bot.on_message(filters.command("time") & filters.private)
-async def set_time_link(bot, message):
+async def set_time_links(bot, message):
     if message.from_user.id not in ADMINS:
         return await message.reply("You are not authorized to use this command.")
     try:
-        text = message.text.split(None, 2)
-        timing = text[1].lower()
-        url = text[2]
-        if not timing.endswith("am") and not timing.endswith("pm"):
-            return await message.reply("Invalid time format. Example: /time 6am https://link")
+        text = message.text.split(None, 1)[1]
+        lines = text.strip().splitlines()
 
-        config = config_collection.find_one({"_id": "time_links"}) or {}
-        links = config.get("links", {})
-        links[timing] = url
-        config_collection.update_one({"_id": "time_links"}, {"$set": {"links": links}}, upsert=True)
+        new_links = {}
+        for line in lines:
+            parts = line.strip().split(None, 1)
+            if len(parts) != 2:
+                return await message.reply("Invalid format. Use:\n`6:00am https://link.com`")
+            time_str, url = parts
+            time_str = time_str.lower()
+            new_links[time_str] = url
 
-        await message.reply(f"Time link set for {timing}: {url}")
+        # Overwrite old links
+        config_collection.update_one({"_id": "time_links"}, {"$set": {"links": new_links}}, upsert=True)
+        await message.reply(f"✅ Time links updated successfully!\n\nTotal {len(new_links)} timings set.")
     except Exception as e:
-        await message.reply("Usage: /time <6am/6:10am> <url>")
+        await message.reply("Usage:\n/time\n6:00am https://link1.com\n6:30am https://link2.com")
 
 @Bot.on_message(filters.command("setlink") & filters.private)
 async def set_link(bot, message):
