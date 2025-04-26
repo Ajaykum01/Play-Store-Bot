@@ -32,10 +32,10 @@ Bot = Client(
 )
 
 FORCE_SUB_LINKS = [
-    "https://t.me/+27yPnr6aQYo2NDE1",
-    "https://t.me/+udIcxtizerAwOTRl",
-    "https://t.me/+np4is6JZyyY3MTg1",
-    "https://t.me/+A0LsNrMLyX8yOGM1",
+    "https://t.me/+oRUXxknMfss2Mjhl",
+    "https://t.me/+_G9vqKb1Aa43Yjg9",
+    "https://t.me/+JJdz2hyOVRYyNzE1",
+    "https://t.me/+hXaGwny7nVo3NDM9",
 ]
 
 # Global cache for time links
