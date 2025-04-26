@@ -63,7 +63,7 @@ async def generate_code(bot, query):
     config = config_collection.find_one({"_id": "config"}) or {}
 
     ist = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
-    current_time_key = ist.strftime("%-I%p").lower()      
+    current_time_key = ist.strftime("%-I%p").lower()
     current_time_full_key = ist.strftime("%-I:%M%p").lower()
 
     times_links = config.get("times_links", {})
@@ -86,8 +86,7 @@ async def generate_code(bot, query):
         photo=image_url,
         caption=caption,
         reply_markup=buttons,
-        parse_mode="markdown",
-        disable_web_page_preview=False
+        parse_mode="markdown"
     )
 
     await query.answer()
