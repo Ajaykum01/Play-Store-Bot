@@ -67,14 +67,13 @@ async def generate_code(bot, query):
     current_time_full_key = ist.strftime("%-I:%M%p").lower()
 
     times_links = config.get("times_links", {})
-
     url = times_links.get(current_time_full_key) or times_links.get(current_time_key) or config.get("redeem_url", "https://modijiurl.com")
 
     hash_code = generate_random_hash()
-    image_url = "https://graph.org/file/2a8e7486b26532bfa9fcb.jpg"
+    image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
-        "**Your Redeem Code Generated successfully✅ EVERY 1 HOURS NEW REDEEM CODES WII GIVE ♥️ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
+        "**Your Redeem Code Generated successfully✅ IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
         f"`hash:` `{hash_code}`\n"
         f"**Code :** [Click Here]({url})"
     )
@@ -86,7 +85,7 @@ async def generate_code(bot, query):
         photo=image_url,
         caption=caption,
         reply_markup=buttons,
-        parse_mode="markdown"
+        parse_mode="Markdown"  # <- FIXED HERE
     )
 
     await query.answer()
@@ -185,7 +184,7 @@ def run_server():
     server.serve_forever()
 
 # Start health check server in background
-threading.Thread(target=run_server).start()
+threading.Thread(target=run_server, daemon=True).start()  # daemon=True to not block exit
 
 # Run the bot
 Bot.run()
