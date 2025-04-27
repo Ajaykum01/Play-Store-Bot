@@ -9,7 +9,7 @@ from pyrogram import Client, filters
 from pyrogram.types import *
 from pymongo import MongoClient
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
 load_dotenv()
@@ -49,21 +49,41 @@ def load_time_links():
 def generate_random_hash():
     return ''.join(random.choices(string.hexdigits.lower(), k=64))
 
+def parse_time_str(time_str):
+    """Parses '6:00am' or '7pm' into datetime.time object."""
+    ist = pytz.timezone('Asia/Kolkata')
+    now = datetime.now(ist)
+    try:
+        time_obj = datetime.strptime(time_str, "%I:%M%p").time()
+    except:
+        time_obj = datetime.strptime(time_str, "%I%p").time()
+    return time_obj
+
 def get_current_link():
     if not time_links_cache:
         load_time_links()
 
     ist = pytz.timezone('Asia/Kolkata')
     now = datetime.now(ist)
-    current_time = now.strftime("%I:%M%p").lstrip("0").lower()
-    current_hour = now.strftime("%I%p").lstrip("0").lower()
+    current_time = now.time()
 
-    if current_time in time_links_cache:
-        return time_links_cache[current_time]
-    elif current_hour in time_links_cache:
-        return time_links_cache[current_hour]
+    # Sort timings
+    sorted_times = sorted(time_links_cache.items(), key=lambda x: parse_time_str(x[0]))
+
+    last_link = None
+
+    for time_str, link in sorted_times:
+        link_time = parse_time_str(time_str)
+        if current_time >= link_time:
+            last_link = link
+        else:
+            break
+
+    if last_link:
+        return last_link
     else:
-        return "https://modijiurl.com"
+        # If current time is before first set time, use last link (yesterday's last)
+        return sorted_times[-1][1] if sorted_times else "https://modijiurl.com"
 
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(bot, message):
@@ -122,6 +142,8 @@ async def set_time_links(bot, message):
                 return await message.reply("Invalid format. Use:\n`6:00am https://link.com`")
             time_str, url = parts
             time_str = time_str.lower()
+            # Validate time
+            parse_time_str(time_str)
             new_links[time_str] = url
 
         config_collection.update_one({"_id": "time_links"}, {"$set": {"links": new_links}}, upsert=True)
