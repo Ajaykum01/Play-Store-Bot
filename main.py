@@ -33,7 +33,7 @@ Bot = Client(
 
 FORCE_SUB_LINKS = [
     "https://yt.openinapp.co/p1y05",
-    "https://yt.openinapp.co/1rxc3",
+    "https://yt.openinapp.co/m0gmh",
     "https://t.me/+JJdz2hyOVRYyNzE1",
     "https://t.me/+hXaGwny7nVo3NDM9",
 ]
