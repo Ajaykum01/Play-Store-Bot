@@ -32,8 +32,8 @@ Bot = Client(
 )
 
 FORCE_SUB_LINKS = [
-    "https://t.me/+oRUXxknMfss2Mjhl",
-    "https://t.me/+_G9vqKb1Aa43Yjg9",
+    "https://yt.openinapp.co/p1y05",
+    "https://yt.openinapp.co/1rxc3",
     "https://t.me/+JJdz2hyOVRYyNzE1",
     "https://t.me/+hXaGwny7nVo3NDM9",
 ]
@@ -91,7 +91,7 @@ async def start(bot, message):
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
 
-    buttons = [[InlineKeyboardButton("Join❤️", url=url)] for url in FORCE_SUB_LINKS]
+    buttons = [[InlineKeyboardButton("Subcribe channel❤️", url=url)] for url in FORCE_SUB_LINKS]
     buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
