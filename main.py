@@ -110,7 +110,7 @@ async def generate_code(bot, query):
         "✅ EVERY 1 HOURS YOU GET FREE CODES 💕\n"
         "❓ IF ANY PROBLEM CONTACT HERE: @Paidpanelbot\n\n"
         f"🔐 **hash:** `{hash_code}`\n"
-        "🔗 **Code:** [Click Me To Get Redeem Code]({link})\n\n"
+        f"🔗 **Code:** [Click Me To Get Redeem Code]({link})\n\n"
         "📌 **How to open link:** https://t.me/kpslinkteam/52"
     )
 
