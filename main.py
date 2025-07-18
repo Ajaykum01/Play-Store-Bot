@@ -9,7 +9,7 @@ from pyrogram import Client, filters
 from pyrogram.types import *
 from pymongo import MongoClient
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 
 load_dotenv()
@@ -50,7 +50,6 @@ def generate_random_hash():
     return ''.join(random.choices(string.hexdigits.lower(), k=64))
 
 def parse_time_str(time_str):
-    """Parses '6:00am' or '7pm' into datetime.time object."""
     ist = pytz.timezone('Asia/Kolkata')
     now = datetime.now(ist)
     try:
@@ -62,16 +61,13 @@ def parse_time_str(time_str):
 def get_current_link():
     if not time_links_cache:
         load_time_links()
-
     ist = pytz.timezone('Asia/Kolkata')
     now = datetime.now(ist)
     current_time = now.time()
 
-    # Sort timings
     sorted_times = sorted(time_links_cache.items(), key=lambda x: parse_time_str(x[0]))
 
     last_link = None
-
     for time_str, link in sorted_times:
         link_time = parse_time_str(time_str)
         if current_time >= link_time:
@@ -82,7 +78,6 @@ def get_current_link():
     if last_link:
         return last_link
     else:
-        # If current time is before first set time, use last link (yesterday's last)
         return sorted_times[-1][1] if sorted_times else "https://modijiurl.com"
 
 @Bot.on_message(filters.command("start") & filters.private)
@@ -91,8 +86,8 @@ async def start(bot, message):
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
 
-    buttons = [[InlineKeyboardButton("Subcribe channel❤️", url=url)] for url in FORCE_SUB_LINKS]
-    buttons.append([InlineKeyboardButton("Verify✅", callback_data="verify")])
+    buttons = [[InlineKeyboardButton("Subscribe Channel ❤️", url=url)] for url in FORCE_SUB_LINKS]
+    buttons.append([InlineKeyboardButton("Verify ✅", callback_data="verify")])
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
 
@@ -100,20 +95,23 @@ async def start(bot, message):
 async def verify_channels(bot, query):
     await query.message.delete()
     await query.message.reply(
-        "🙏Welcome to NST free Google Play Redeem Code Bot RS30-200🪙\nClick On Generate Code",
+        "🙏 Welcome to NST Free Google Play Redeem Code Bot RS30-200 🪙\nClick On Generate Code",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
 @Bot.on_callback_query(filters.regex("gen_code"))
 async def generate_code(bot, query):
     hash_code = generate_random_hash()
-    link = get_current_link()
+    link = "https://t.me/kpslinkteam/52"  # 🔗 Replace with get_current_link() if needed
     image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
-        "**Your Redeem Code Generated successfully✅\n\u2705 EVERY 1 HOURS YOU GET FREE CODES 💕 IF ANY PROBLEM CONTACT HERE @Paidpanelbot**\n\n"
-        f"`hash:` `{hash_code}`\n"
-        f"**Code :** `{link}`"
+        "**Your Redeem Code Generated Successfully ✅**\n"
+        "🕒 **Every 1 hour you get new codes!**\n"
+        "❓ If you face any problem, contact: @Paidpanelbot\n\n"
+        f"🔐 `hash:` `{hash_code}`\n"
+        f"🔗 **Code Link:** [Click here to open the code]({link})\n\n"
+        "📌 **How to open:** Tap the link above, it will open in Telegram directly."
     )
 
     buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
@@ -142,14 +140,13 @@ async def set_time_links(bot, message):
                 return await message.reply("Invalid format. Use:\n`6:00am https://link.com`")
             time_str, url = parts
             time_str = time_str.lower()
-            # Validate time
             parse_time_str(time_str)
             new_links[time_str] = url
 
         config_collection.update_one({"_id": "time_links"}, {"$set": {"links": new_links}}, upsert=True)
         load_time_links()
         await message.reply(f"✅ Time links updated successfully!\n\nTotal {len(new_links)} timings set.")
-    except Exception as e:
+    except Exception:
         await message.reply("Usage:\n/time\n6:00am https://link1.com\n6:30am https://link2.com")
 
 @Bot.on_message(filters.command("setlink") & filters.private)
@@ -198,7 +195,7 @@ async def auto_ping():
                 await session.get("https://jittery-merna-agnalagnal4-8c1a65b0.koyeb.app/")
         except:
             pass
-        await asyncio.sleep(300)  # Ping every 5 minutes
+        await asyncio.sleep(300)
 
 if __name__ == "__main__":
     threading.Thread(target=run_server, daemon=True).start()
