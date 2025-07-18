@@ -102,16 +102,16 @@ async def verify_channels(bot, query):
 @Bot.on_callback_query(filters.regex("gen_code"))
 async def generate_code(bot, query):
     hash_code = generate_random_hash()
-    link = "https://t.me/kpslinkteam/52"  # 🔗 Replace with get_current_link() if needed
+    link = get_current_link()
     image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
-        "**Your Redeem Code Generated Successfully ✅**\n"
-        "🕒 **Every 1 hour you get new codes!**\n"
-        "❓ If you face any problem, contact: @Paidpanelbot\n\n"
-        f"🔐 `hash:` `{hash_code}`\n"
-        f"🔗 **Code Link:** [Click here to open the code]({link})\n\n"
-        "📌 **How to open:** Tap the link above, it will open in Telegram directly."
+        "**Your Redeem Code Generated successfully ✅**\n"
+        "✅ EVERY 1 HOURS YOU GET FREE CODES 💕\n"
+        "❓ IF ANY PROBLEM CONTACT HERE: @Paidpanelbot\n\n"
+        f"🔐 **hash:** `{hash_code}`\n"
+        f"🔗 **Code:** [Click here to open your redeem link]({link})\n\n"
+        "📌 **How to open link:** https://t.me/kpslinkteam/52"
     )
 
     buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
