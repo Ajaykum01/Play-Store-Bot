@@ -86,7 +86,7 @@ async def start(bot, message):
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
 
-    buttons = [[InlineKeyboardButton("Subscribe Channel 👇👇👍", url=url)] for url in FORCE_SUB_LINKS]
+    buttons = [[InlineKeyboardButton("Subscribe Channel 😎", url=url)] for url in FORCE_SUB_LINKS]
     buttons.append([InlineKeyboardButton("Verify ♥️", callback_data="verify")])
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
