@@ -9,17 +9,17 @@ from pyrogram import Client, filters
 from pyrogram.types import *
 from pymongo import MongoClient
 from dotenv import load_dotenv
-from datetime import datetime
-import pytz
+import re
 
 load_dotenv()
 
-# MongoDB setup
+# -------------------- CONFIG --------------------
 MONGO_URL = os.getenv("MONGO_URL")
 client = MongoClient(MONGO_URL)
 db = client["telegram_bot"]
 config_collection = db["config"]
 users_collection = db["users"]
+codes_collection = db["redeem_codes"]  # stores redeem codes
 
 ADMINS = [int(i) for i in os.getenv("ADMINS", "2117119246").split()]
 
@@ -31,6 +31,7 @@ Bot = Client(
     api_hash=os.environ["API_HASH"]
 )
 
+# Channels to join
 FORCE_SUB_LINKS = [
     "https://yt.openinapp.co/fatz4",
     "https://yt.openinapp.co/u4hem",
@@ -38,50 +39,74 @@ FORCE_SUB_LINKS = [
     "https://t.me/+hXaGwny7nVo3NDM9",
 ]
 
-# Global cache for time links
-time_links_cache = {}
+# GyaniLinks API for verification short link
+GYANI_API_TOKEN = "4be71cae8f3aeabe56467793a0ee8f20e0906f3a"
+VERIFY_TUTORIAL_URL = "https://t.me/kpslinkteam/59"
 
-def load_time_links():
-    global time_links_cache
-    config = config_collection.find_one({"_id": "time_links"}) or {}
-    time_links_cache = config.get("links", {}) or {}
+# Image shown with code
+CODE_IMAGE_URL = "https://envs.sh/CCn.jpg"
 
-def generate_random_hash():
-    return ''.join(random.choices(string.hexdigits.lower(), k=64))
 
-def parse_time_str(time_str):
-    ist = pytz.timezone('Asia/Kolkata')
-    now = datetime.now(ist)
+# -------------------- HELPERS --------------------
+async def shorten_link(long_url: str) -> str:
+    """
+    Shorten a link using GyaniLinks API (text format).
+    Returns the short link if successful; otherwise returns the original link.
+    """
+    api_url = f"https://gyanilinks.com/api?api={GYANI_API_TOKEN}&url={long_url}&format=text"
     try:
-        time_obj = datetime.strptime(time_str, "%I:%M%p").time()
-    except:
-        time_obj = datetime.strptime(time_str, "%I%p").time()
-    return time_obj
-
-def get_current_link():
-    if not time_links_cache:
-        load_time_links()
-    ist = pytz.timezone('Asia/Kolkata')
-    now = datetime.now(ist)
-    current_time = now.time()
-
-    sorted_times = sorted(time_links_cache.items(), key=lambda x: parse_time_str(x[0]))
-
-    last_link = None
-    for time_str, link in sorted_times:
-        link_time = parse_time_str(time_str)
-        if current_time >= link_time:
-            last_link = link
-        else:
-            break
-
-    if last_link:
-        return last_link
-    else:
-        return sorted_times[-1][1] if sorted_times else "https://modijiurl.com"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, timeout=20) as resp:
+                if resp.status == 200:
+                    short = (await resp.text()).strip()
+                    if short:
+                        return short
+    except Exception as e:
+        print("Shortener error:", e)
+    return long_url
 
 
-# ---------------- START ----------------
+def normalize_codes(raw: str):
+    """
+    Parse /codes input like: '/codes Abc582 ,Bslei92. xyz-123'
+    Returns a cleaned list of codes (alnum + - _ allowed).
+    """
+    # Remove the command itself
+    body = raw.split(maxsplit=1)
+    if len(body) < 2:
+        return []
+    body = body[1]
+
+    # Split on whitespace or commas
+    parts = re.split(r"[\s,]+", body)
+    cleaned = []
+    for p in parts:
+        p = p.strip()
+        if not p:
+            continue
+        # Strip trailing punctuation
+        p = re.sub(r"[^\w\-]+$", "", p)
+        # Allow only safe chars
+        if re.fullmatch(r"[A-Za-z0-9\-_]+", p):
+            cleaned.append(p)
+    return cleaned
+
+
+def get_fresh_code():
+    """
+    Atomically fetch the next unused code and mark as used.
+    """
+    doc = codes_collection.find_one_and_update(
+        {"used": {"$ne": True}},
+        {"$set": {"used": True}},
+        sort=[("_id", 1)]
+    )
+    if doc:
+        return doc.get("code")
+    return None
+
+
+# -------------------- USER FLOW --------------------
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(bot, message):
     user_id = message.from_user.id
@@ -96,8 +121,8 @@ async def start(bot, message):
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-# ---------------- AFTER JOIN ----------------
-@Bot.on_callback_query(filters.regex("joined"))
+
+@Bot.on_callback_query(filters.regex("^joined$"))
 async def joined_channels(bot, query):
     await query.message.delete()
     await query.message.reply(
@@ -107,32 +132,42 @@ async def joined_channels(bot, query):
         )
     )
 
-# ---------------- ASK VERIFY BEFORE GENERATE ----------------
-@Bot.on_callback_query(filters.regex("gen_code_verify"))
+
+@Bot.on_callback_query(filters.regex("^gen_code_verify$"))
 async def gen_code_verify(bot, query):
     await query.message.delete()
+
+    # Always shorten the verification tutorial link so it goes via your shortener
+    short_verify_url = await shorten_link(VERIFY_TUTORIAL_URL)
+
     await query.message.reply(
-        "⚠️ Due to high demand of redeem codes, please verify you're a real person before generating.",
+        "⚠️ Due to high demand of redeem codes, please verify you're a real person before generating.\n\n"
+        "📌 Watch the video and follow the steps in the verification page.",
         reply_markup=InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("✅ Verify", url="https://t.me/kpslinkteam/59")],
+                [InlineKeyboardButton("✅ Verify Now", url=short_verify_url)],
                 [InlineKeyboardButton("🔄 After Verify, Click Here", callback_data="verified_generate")]
             ]
         )
     )
 
-# ---------------- FINAL GENERATE CODE ----------------
-@Bot.on_callback_query(filters.regex("verified_generate"))
+
+@Bot.on_callback_query(filters.regex("^verified_generate$"))
 async def verified_generate(bot, query):
     await query.message.delete()
-    link = get_current_link()
-    image_url = "https://envs.sh/CCn.jpg"
+
+    code = get_fresh_code()
+    if not code:
+        await query.message.reply(
+            "⚠️ Sorry, no redeem codes left right now. Please try again later."
+        )
+        return
 
     caption = (
         "**🎁 Your Redeem Code Generated successfully ✅**\n\n"
-        f"🔗 **Code:** [Click Me To Get Redeem Code]({link})\n\n"
-        "📌 **How to open link:** https://t.me/kpslinkteam/52\n\n"
-        "⏳ You can generate again but must verify each time."
+        f"🔗 **Code:** `{code}`\n\n"
+        "📌 **How to redeem code:** https://t.me/kpslinkteam/52\n\n"
+        "⏳ You can generate again, but must verify each time."
     )
 
     buttons = InlineKeyboardMarkup(
@@ -141,47 +176,43 @@ async def verified_generate(bot, query):
 
     await bot.send_photo(
         chat_id=query.message.chat.id,
-        photo=image_url,
+        photo=CODE_IMAGE_URL,
         caption=caption,
         reply_markup=buttons
     )
     await query.answer()
 
 
-# ---------------- ADMIN COMMANDS ----------------
-@Bot.on_message(filters.command("time") & filters.private)
-async def set_time_links(bot, message):
+# -------------------- ADMIN COMMANDS --------------------
+@Bot.on_message(filters.command("codes") & filters.private)
+async def add_codes(bot, message):
     if message.from_user.id not in ADMINS:
-        return await message.reply("You are not authorized to use this command.")
-    try:
-        text = message.text.split(None, 1)[1]
-        lines = text.strip().splitlines()
+        return await message.reply("❌ You are not authorized to use this command.")
 
-        new_links = {}
-        for line in lines:
-            parts = line.strip().split(None, 1)
-            if len(parts) != 2:
-                return await message.reply("Invalid format. Use:\n`6:00am https://link.com`")
-            time_str, url = parts
-            time_str = time_str.lower()
-            parse_time_str(time_str)
-            new_links[time_str] = url
+    codes = normalize_codes(message.text)
+    if not codes:
+        return await message.reply("❌ Usage:\n`/codes CODE1 CODE2 CODE3`\nYou can also separate with commas.", quote=True)
 
-        config_collection.update_one({"_id": "time_links"}, {"$set": {"links": new_links}}, upsert=True)
-        load_time_links()
-        await message.reply(f"✅ Time links updated successfully!\n\nTotal {len(new_links)} timings set.")
-    except Exception:
-        await message.reply("Usage:\n/time\n6:00am https://link1.com\n6:30am https://link2.com")
+    inserted = 0
+    for c in codes:
+        # Avoid duplicates if already present and unused
+        existing = codes_collection.find_one({"code": c})
+        if existing:
+            continue
+        codes_collection.insert_one({"code": c, "used": False})
+        inserted += 1
 
-@Bot.on_message(filters.command("setlink") & filters.private)
-async def set_link(bot, message):
+    await message.reply(f"✅ Added {inserted} code(s).")
+
+
+@Bot.on_message(filters.command("codes_left") & filters.private)
+async def codes_left(bot, message):
     if message.from_user.id not in ADMINS:
-        return await message.reply("You are not authorized to use this command.")
-    if len(message.command) < 2:
-        return await message.reply("Usage: /setlink <url>")
-    url = message.text.split(None, 1)[1]
-    config_collection.update_one({"_id": "config"}, {"$set": {"redeem_url": url}}, upsert=True)
-    await message.reply("Default redeem link updated successfully.")
+        return await message.reply("❌ You are not authorized to use this command.")
+    left = codes_collection.count_documents({"used": {"$ne": True}})
+    used = codes_collection.count_documents({"used": True})
+    await message.reply(f"📦 Codes left: {left}\n🗂️ Codes used: {used}")
+
 
 @Bot.on_message(filters.command("broadcast") & filters.private)
 async def broadcast(bot, message):
@@ -199,7 +230,8 @@ async def broadcast(bot, message):
             continue
     await message.reply(f"Broadcast sent to {count} users.")
 
-# ---------------- HEALTH CHECK ----------------
+
+# -------------------- HEALTH CHECK --------------------
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -207,11 +239,14 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"Bot is Alive!")
 
+
 def run_server():
     server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
     server.serve_forever()
 
+
 async def auto_ping():
+    # If you host on a free service that sleeps, you can ping your own URL here.
     await Bot.start()
     while True:
         try:
@@ -221,9 +256,10 @@ async def auto_ping():
             pass
         await asyncio.sleep(300)
 
+
+# -------------------- MAIN --------------------
 if __name__ == "__main__":
     threading.Thread(target=run_server, daemon=True).start()
-    load_time_links()
     loop = asyncio.get_event_loop()
     loop.create_task(auto_ping())
     Bot.run()
