@@ -1,7 +1,6 @@
 import os
 import threading
 import random
-import string
 import asyncio
 import aiohttp
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -12,6 +11,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 import pytz
 
+# ---------------- LOAD ENV ----------------
 load_dotenv()
 
 # MongoDB setup
@@ -31,6 +31,7 @@ Bot = Client(
     api_hash=os.environ["API_HASH"]
 )
 
+# Force Sub Links
 FORCE_SUB_LINKS = [
     "https://yt.openinapp.co/fatz4",
     "https://yt.openinapp.co/u4hem",
@@ -40,11 +41,18 @@ FORCE_SUB_LINKS = [
 
 # Cache for time-based links
 time_links_cache = {}
+codes_cache = []
 
+# ---------------- UTILS ----------------
 def load_time_links():
     global time_links_cache
     config = config_collection.find_one({"_id": "time_links"}) or {}
     time_links_cache = config.get("links", {}) or {}
+
+def load_codes():
+    global codes_cache
+    config = config_collection.find_one({"_id": "codes"}) or {}
+    codes_cache = config.get("codes", []) or []
 
 def parse_time_str(time_str):
     try:
@@ -58,7 +66,6 @@ def get_current_link():
     ist = pytz.timezone('Asia/Kolkata')
     now = datetime.now(ist)
     current_time = now.time()
-
     sorted_times = sorted(time_links_cache.items(), key=lambda x: parse_time_str(x[0]))
     last_link = None
     for time_str, link in sorted_times:
@@ -67,6 +74,11 @@ def get_current_link():
         else:
             break
     return last_link or (sorted_times[-1][1] if sorted_times else "https://modijiurl.com")
+
+def get_random_code():
+    if not codes_cache:
+        load_codes()
+    return random.choice(codes_cache) if codes_cache else "No Codes Set Yet ❌"
 
 # ---------------- START ----------------
 @Bot.on_message(filters.command("start") & filters.private)
@@ -110,13 +122,15 @@ async def generate_code(bot, query):
 @Bot.on_callback_query(filters.regex("show_code"))
 async def show_code(bot, query):
     link = get_current_link()
+    code = get_random_code()
     image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
         "**Your Redeem Code Generated successfully ✅**\n"
         "✅ EVERY 1 HOURS YOU GET FREE CODES 💕\n"
         "❓ IF ANY PROBLEM CONTACT HERE: @Paidpanelbot\n\n"
-        f"🔗 **Code:** [Click Me To Get Redeem Code]({link})\n\n"
+        f"🔗 **Code:** `{code}`\n\n"
+        f"🌐 Extra Link: [Click Here]({link})\n\n"
         "📌 **How to open link:** https://t.me/kpslinkteam/52"
     )
 
@@ -154,15 +168,18 @@ async def set_time_links(bot, message):
     except Exception:
         await message.reply("Usage:\n/time\n6:00am https://link1.com\n6:30am https://link2.com")
 
-@Bot.on_message(filters.command("setlink") & filters.private)
-async def set_link(bot, message):
+@Bot.on_message(filters.command("codes") & filters.private)
+async def set_codes(bot, message):
     if message.from_user.id not in ADMINS:
         return await message.reply("You are not authorized.")
-    if len(message.command) < 2:
-        return await message.reply("Usage: /setlink <url>")
-    url = message.text.split(None, 1)[1]
-    config_collection.update_one({"_id": "config"}, {"$set": {"redeem_url": url}}, upsert=True)
-    await message.reply("Default redeem link updated successfully.")
+    try:
+        text = message.text.split(None, 1)[1]
+        codes = [c.strip() for c in text.split(",")]
+        config_collection.update_one({"_id": "codes"}, {"$set": {"codes": codes}}, upsert=True)
+        load_codes()
+        await message.reply(f"✅ Codes updated successfully!\n\nTotal {len(codes)} codes set.")
+    except Exception:
+        await message.reply("Usage:\n/codes Abc582,Bslei92,Test001")
 
 @Bot.on_message(filters.command("broadcast") & filters.private)
 async def broadcast(bot, message):
@@ -193,11 +210,10 @@ def run_server():
     server.serve_forever()
 
 async def auto_ping():
-    await Bot.start()
     while True:
         try:
             async with aiohttp.ClientSession() as session:
-                await session.get("https://jittery-merna-agnalagnal4-8c1a65b0.koyeb.app/")
+                await session.get("https://YOUR-KOYEB-APP-URL.koyeb.app/")
         except:
             pass
         await asyncio.sleep(300)
@@ -206,6 +222,7 @@ async def auto_ping():
 if __name__ == "__main__":
     threading.Thread(target=run_server, daemon=True).start()
     load_time_links()
+    load_codes()
     loop = asyncio.get_event_loop()
     loop.create_task(auto_ping())
     Bot.run()
