@@ -6,7 +6,7 @@ import asyncio
 import aiohttp
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
-from pyrogram.types import *
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from datetime import datetime
@@ -35,10 +35,10 @@ FORCE_SUB_LINKS = [
     "https://yt.openinapp.co/fatz4",
     "https://yt.openinapp.co/u4hem",
     "https://t.me/+JJdz2hyOVRYyNzE1",
-    "https://t.me/+hXaGwny7nVo3NDM9",
+    "https://t.me/+hXaGwny7nVo3NDM9"
 ]
 
-# Global cache for time links
+# Cache for time-based links
 time_links_cache = {}
 
 def load_time_links():
@@ -46,17 +46,11 @@ def load_time_links():
     config = config_collection.find_one({"_id": "time_links"}) or {}
     time_links_cache = config.get("links", {}) or {}
 
-def generate_random_hash():
-    return ''.join(random.choices(string.hexdigits.lower(), k=64))
-
 def parse_time_str(time_str):
-    ist = pytz.timezone('Asia/Kolkata')
-    now = datetime.now(ist)
     try:
-        time_obj = datetime.strptime(time_str, "%I:%M%p").time()
+        return datetime.strptime(time_str, "%I:%M%p").time()
     except:
-        time_obj = datetime.strptime(time_str, "%I%p").time()
-    return time_obj
+        return datetime.strptime(time_str, "%I%p").time()
 
 def get_current_link():
     if not time_links_cache:
@@ -66,55 +60,69 @@ def get_current_link():
     current_time = now.time()
 
     sorted_times = sorted(time_links_cache.items(), key=lambda x: parse_time_str(x[0]))
-
     last_link = None
     for time_str, link in sorted_times:
-        link_time = parse_time_str(time_str)
-        if current_time >= link_time:
+        if current_time >= parse_time_str(time_str):
             last_link = link
         else:
             break
+    return last_link or (sorted_times[-1][1] if sorted_times else "https://modijiurl.com")
 
-    if last_link:
-        return last_link
-    else:
-        return sorted_times[-1][1] if sorted_times else "https://modijiurl.com"
-
+# ---------------- START ----------------
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(bot, message):
     user_id = message.from_user.id
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
 
-    buttons = [[InlineKeyboardButton("Subscribe Channel â¤ï¸", url=url)] for url in FORCE_SUB_LINKS]
-    buttons.append([InlineKeyboardButton("Verify âœ…", callback_data="verify")])
+    buttons = [[InlineKeyboardButton("Subscribe Channel ❤️", url=url)] for url in FORCE_SUB_LINKS]
+    buttons.append([
+        InlineKeyboardButton("Verify ✅", callback_data="verify"),
+        InlineKeyboardButton("How to Verify ❓", url="https://t.me/kpslinkteam/52")
+    ])
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=reply_markup)
 
+# ---------------- VERIFY ----------------
 @Bot.on_callback_query(filters.regex("verify"))
 async def verify_channels(bot, query):
     await query.message.delete()
     await query.message.reply(
-        "ðŸ™ Welcome to NST Free Google Play Redeem Code Bot RS30-200 ðŸª™\nClick On Generate Code",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
+        "🙏 Welcome to NST Free Google Play Redeem Code Bot RS30-200 🪙\nClick On Generate Code",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("Generate Code", callback_data="gen_code")]
+        ])
     )
 
+# ---------------- GENERATE CODE ----------------
 @Bot.on_callback_query(filters.regex("gen_code"))
 async def generate_code(bot, query):
-    hash_code = generate_random_hash()
+    buttons = [[InlineKeyboardButton("Subscribe Channel ❤️", url=url)] for url in FORCE_SUB_LINKS]
+    buttons.append([
+        InlineKeyboardButton("Verify ✅", callback_data="show_code"),
+        InlineKeyboardButton("How to Verify ❓", url="https://t.me/kpslinkteam/52")
+    ])
+    reply_markup = InlineKeyboardMarkup(buttons)
+    await query.message.reply("Before getting code, please verify again 👇", reply_markup=reply_markup)
+    await query.answer()
+
+# ---------------- SHOW CODE ----------------
+@Bot.on_callback_query(filters.regex("show_code"))
+async def show_code(bot, query):
     link = get_current_link()
     image_url = "https://envs.sh/CCn.jpg"
 
     caption = (
-        "**Your Redeem Code Generated successfully âœ…**\n"
-        "âœ… EVERY 1 HOURS YOU GET FREE CODES ðŸ’•\n"
-        "â“ IF ANY PROBLEM CONTACT HERE: @Paidpanelbot\n\n"
-        f"ðŸ” **hash:** `{hash_code}`\n"
-        f"ðŸ”— **Code:** [Click Me To Get Redeem Code]({link})\n\n"
-        "ðŸ“Œ **How to open link:** https://t.me/kpslinkteam/52"
+        "**Your Redeem Code Generated successfully ✅**\n"
+        "✅ EVERY 1 HOURS YOU GET FREE CODES 💕\n"
+        "❓ IF ANY PROBLEM CONTACT HERE: @Paidpanelbot\n\n"
+        f"🔗 **Code:** [Click Me To Get Redeem Code]({link})\n\n"
+        "📌 **How to open link:** https://t.me/kpslinkteam/52"
     )
 
-    buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Generate Again 🔄", callback_data="gen_code")]
+    ])
 
     await bot.send_photo(
         chat_id=query.message.chat.id,
@@ -122,37 +130,34 @@ async def generate_code(bot, query):
         caption=caption,
         reply_markup=buttons
     )
-
     await query.answer()
 
+# ---------------- ADMIN COMMANDS ----------------
 @Bot.on_message(filters.command("time") & filters.private)
 async def set_time_links(bot, message):
     if message.from_user.id not in ADMINS:
-        return await message.reply("You are not authorized to use this command.")
+        return await message.reply("You are not authorized.")
     try:
         text = message.text.split(None, 1)[1]
         lines = text.strip().splitlines()
-
         new_links = {}
         for line in lines:
             parts = line.strip().split(None, 1)
             if len(parts) != 2:
                 return await message.reply("Invalid format. Use:\n`6:00am https://link.com`")
             time_str, url = parts
-            time_str = time_str.lower()
-            parse_time_str(time_str)
-            new_links[time_str] = url
-
+            parse_time_str(time_str.lower())
+            new_links[time_str.lower()] = url
         config_collection.update_one({"_id": "time_links"}, {"$set": {"links": new_links}}, upsert=True)
         load_time_links()
-        await message.reply(f"âœ… Time links updated successfully!\n\nTotal {len(new_links)} timings set.")
+        await message.reply(f"✅ Time links updated successfully!\n\nTotal {len(new_links)} timings set.")
     except Exception:
         await message.reply("Usage:\n/time\n6:00am https://link1.com\n6:30am https://link2.com")
 
 @Bot.on_message(filters.command("setlink") & filters.private)
 async def set_link(bot, message):
     if message.from_user.id not in ADMINS:
-        return await message.reply("You are not authorized to use this command.")
+        return await message.reply("You are not authorized.")
     if len(message.command) < 2:
         return await message.reply("Usage: /setlink <url>")
     url = message.text.split(None, 1)[1]
@@ -162,7 +167,7 @@ async def set_link(bot, message):
 @Bot.on_message(filters.command("broadcast") & filters.private)
 async def broadcast(bot, message):
     if message.from_user.id not in ADMINS:
-        return await message.reply("You are not authorized to use this command.")
+        return await message.reply("You are not authorized.")
     if len(message.command) < 2:
         return await message.reply("Usage: /broadcast <your message>")
     broadcast_text = message.text.split(None, 1)[1]
@@ -175,7 +180,7 @@ async def broadcast(bot, message):
             continue
     await message.reply(f"Broadcast sent to {count} users.")
 
-# Health check server
+# ---------------- HEALTH CHECK ----------------
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -197,6 +202,7 @@ async def auto_ping():
             pass
         await asyncio.sleep(300)
 
+# ---------------- MAIN ----------------
 if __name__ == "__main__":
     threading.Thread(target=run_server, daemon=True).start()
     load_time_links()
