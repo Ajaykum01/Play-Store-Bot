@@ -10,6 +10,7 @@ from pyrogram.types import *
 from pymongo import MongoClient
 from dotenv import load_dotenv
 import re
+import time
 
 load_dotenv()
 
@@ -17,13 +18,12 @@ load_dotenv()
 MONGO_URL = os.getenv("MONGO_URL")
 client = MongoClient(MONGO_URL)
 db = client["telegram_bot"]
-config_collection = db["config"]
 users_collection = db["users"]
-codes_collection = db["redeem_codes"]  # stores redeem codes
+codes_collection = db["redeem_codes"]
+tokens_collection = db["verify_tokens"]
 
 ADMINS = [int(i) for i in os.getenv("ADMINS", "2117119246").split()]
 
-# Telegram Bot setup
 Bot = Client(
     "Play-Store-Bot",
     bot_token=os.environ["BOT_TOKEN"],
@@ -31,7 +31,6 @@ Bot = Client(
     api_hash=os.environ["API_HASH"]
 )
 
-# Channels to join
 FORCE_SUB_LINKS = [
     "https://yt.openinapp.co/fatz4",
     "https://yt.openinapp.co/u4hem",
@@ -39,20 +38,14 @@ FORCE_SUB_LINKS = [
     "https://t.me/+hXaGwny7nVo3NDM9",
 ]
 
-# GyaniLinks API for verification short link
 GYANI_API_TOKEN = "4be71cae8f3aeabe56467793a0ee8f20e0906f3a"
-VERIFY_TUTORIAL_URL = "https://t.me/kpslinkteam/59"
-
-# Image shown with code
+VERIFY_PAGE_URL = "https://t.me/kpslinkteam/59"  # main verification
+HOWTO_URL = "https://t.me/kpslinkteam/52"        # how to verify tutorial
 CODE_IMAGE_URL = "https://envs.sh/CCn.jpg"
 
 
 # -------------------- HELPERS --------------------
 async def shorten_link(long_url: str) -> str:
-    """
-    Shorten a link using GyaniLinks API (text format).
-    Returns the short link if successful; otherwise returns the original link.
-    """
     api_url = f"https://gyanilinks.com/api?api={GYANI_API_TOKEN}&url={long_url}&format=text"
     try:
         async with aiohttp.ClientSession() as session:
@@ -61,41 +54,48 @@ async def shorten_link(long_url: str) -> str:
                     short = (await resp.text()).strip()
                     if short:
                         return short
-    except Exception as e:
-        print("Shortener error:", e)
+    except:
+        pass
     return long_url
 
 
+def new_token(user_id: int) -> str:
+    token = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+    tokens_collection.update_one(
+        {"user_id": user_id},
+        {"$set": {"token": token, "time": time.time(), "used": False}},
+        upsert=True
+    )
+    return token
+
+
+def check_token(user_id: int) -> bool:
+    doc = tokens_collection.find_one({"user_id": user_id, "used": False})
+    if not doc:
+        return False
+    # expire tokens after 5 minutes
+    if time.time() - doc["time"] > 300:
+        tokens_collection.delete_one({"_id": doc["_id"]})
+        return False
+    tokens_collection.update_one({"_id": doc["_id"]}, {"$set": {"used": True}})
+    return True
+
+
 def normalize_codes(raw: str):
-    """
-    Parse /codes input like: '/codes Abc582 ,Bslei92. xyz-123'
-    Returns a cleaned list of codes (alnum + - _ allowed).
-    """
-    # Remove the command itself
     body = raw.split(maxsplit=1)
     if len(body) < 2:
         return []
     body = body[1]
-
-    # Split on whitespace or commas
     parts = re.split(r"[\s,]+", body)
     cleaned = []
     for p in parts:
-        p = p.strip()
-        if not p:
-            continue
-        # Strip trailing punctuation
-        p = re.sub(r"[^\w\-]+$", "", p)
-        # Allow only safe chars
+        p = re.sub(r"[^\w\-]+$", "", p.strip())
         if re.fullmatch(r"[A-Za-z0-9\-_]+", p):
             cleaned.append(p)
     return cleaned
 
 
 def get_fresh_code():
-    """
-    Atomically fetch the next unused code and mark as used.
-    """
     doc = codes_collection.find_one_and_update(
         {"used": {"$ne": True}},
         {"$set": {"used": True}},
@@ -137,16 +137,19 @@ async def joined_channels(bot, query):
 async def gen_code_verify(bot, query):
     await query.message.delete()
 
-    # Always shorten the verification tutorial link so it goes via your shortener
-    short_verify_url = await shorten_link(VERIFY_TUTORIAL_URL)
+    # Generate token for this user
+    token = new_token(query.from_user.id)
+    verify_url = f"{VERIFY_PAGE_URL}?verify={token}"
+    short_url = await shorten_link(verify_url)
 
     await query.message.reply(
-        "⚠️ Due to high demand of redeem codes, please verify you're a real person before generating.\n\n"
-        "📌 Watch the video and follow the steps in the verification page.",
+        "⚠️ Please verify before generating your code.\n\n"
+        "🔗 Open the verification link and complete it, then come back and press **I Verified**.",
         reply_markup=InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("✅ Verify Now", url=short_verify_url)],
-                [InlineKeyboardButton("🔄 After Verify, Click Here", callback_data="verified_generate")]
+                [InlineKeyboardButton("✅ Verify Now", url=short_url)],
+                [InlineKeyboardButton("ℹ️ How to Verify?", url=HOWTO_URL)],
+                [InlineKeyboardButton("🔄 I Verified", callback_data="verified_generate")]
             ]
         )
     )
@@ -154,19 +157,24 @@ async def gen_code_verify(bot, query):
 
 @Bot.on_callback_query(filters.regex("^verified_generate$"))
 async def verified_generate(bot, query):
+    user_id = query.from_user.id
     await query.message.delete()
+
+    if not check_token(user_id):
+        await query.message.reply(
+            "❌ Verification failed or expired.\n\nPlease click **Generate Code** again and verify properly."
+        )
+        return
 
     code = get_fresh_code()
     if not code:
-        await query.message.reply(
-            "⚠️ Sorry, no redeem codes left right now. Please try again later."
-        )
+        await query.message.reply("⚠️ Sorry, no redeem codes left right now. Please try later.")
         return
 
     caption = (
         "**🎁 Your Redeem Code Generated successfully ✅**\n\n"
         f"🔗 **Code:** `{code}`\n\n"
-        "📌 **How to redeem code:** https://t.me/kpslinkteam/52\n\n"
+        "📌 How to redeem: https://t.me/kpslinkteam/52\n\n"
         "⏳ You can generate again, but must verify each time."
     )
 
@@ -183,83 +191,26 @@ async def verified_generate(bot, query):
     await query.answer()
 
 
-# -------------------- ADMIN COMMANDS --------------------
+# -------------------- ADMIN --------------------
 @Bot.on_message(filters.command("codes") & filters.private)
 async def add_codes(bot, message):
     if message.from_user.id not in ADMINS:
-        return await message.reply("❌ You are not authorized to use this command.")
-
+        return
     codes = normalize_codes(message.text)
     if not codes:
-        return await message.reply("❌ Usage:\n`/codes CODE1 CODE2 CODE3`\nYou can also separate with commas.", quote=True)
-
+        return await message.reply("❌ Usage:\n/codes CODE1 CODE2 CODE3")
     inserted = 0
     for c in codes:
-        # Avoid duplicates if already present and unused
-        existing = codes_collection.find_one({"code": c})
-        if existing:
-            continue
-        codes_collection.insert_one({"code": c, "used": False})
-        inserted += 1
-
+        if not codes_collection.find_one({"code": c}):
+            codes_collection.insert_one({"code": c, "used": False})
+            inserted += 1
     await message.reply(f"✅ Added {inserted} code(s).")
 
 
 @Bot.on_message(filters.command("codes_left") & filters.private)
 async def codes_left(bot, message):
     if message.from_user.id not in ADMINS:
-        return await message.reply("❌ You are not authorized to use this command.")
+        return
     left = codes_collection.count_documents({"used": {"$ne": True}})
     used = codes_collection.count_documents({"used": True})
-    await message.reply(f"📦 Codes left: {left}\n🗂️ Codes used: {used}")
-
-
-@Bot.on_message(filters.command("broadcast") & filters.private)
-async def broadcast(bot, message):
-    if message.from_user.id not in ADMINS:
-        return await message.reply("You are not authorized to use this command.")
-    if len(message.command) < 2:
-        return await message.reply("Usage: /broadcast <your message>")
-    broadcast_text = message.text.split(None, 1)[1]
-    count = 0
-    for user in users_collection.find():
-        try:
-            await bot.send_message(chat_id=user['_id'], text=broadcast_text)
-            count += 1
-        except:
-            continue
-    await message.reply(f"Broadcast sent to {count} users.")
-
-
-# -------------------- HEALTH CHECK --------------------
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-        self.wfile.write(b"Bot is Alive!")
-
-
-def run_server():
-    server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
-    server.serve_forever()
-
-
-async def auto_ping():
-    # If you host on a free service that sleeps, you can ping your own URL here.
-    await Bot.start()
-    while True:
-        try:
-            async with aiohttp.ClientSession() as session:
-                await session.get("https://jittery-merna-agnalagnal4-8c1a65b0.koyeb.app/")
-        except:
-            pass
-        await asyncio.sleep(300)
-
-
-# -------------------- MAIN --------------------
-if __name__ == "__main__":
-    threading.Thread(target=run_server, daemon=True).start()
-    loop = asyncio.get_event_loop()
-    loop.create_task(auto_ping())
-    Bot.run()
+    await message.reply(f"📦 Left: {left}\n🗂️ Used: {used}")
