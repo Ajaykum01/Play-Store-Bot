@@ -38,12 +38,11 @@ FORCE_SUB_LINKS = [
     "https://t.me/+hXaGwny7nVo3NDM9",
 ]
 
+# GyanLinks API token
+GYANLINKS_API = "4be71cae8f3aeabe56467793a0ee8f20e0906f3a"
+
 # Global cache for time links
 time_links_cache = {}
-
-# --- NEW: GyaniLinks API setup ---
-GYANI_API = "4be71cae8f3aeabe56467793a0ee8f20e0906f3a"
-pending_tokens = {}
 
 def load_time_links():
     global time_links_cache
@@ -84,14 +83,13 @@ def get_current_link():
     else:
         return sorted_times[-1][1] if sorted_times else "https://modijiurl.com"
 
-# --- NEW: GyaniLinks shortener ---
-async def create_gyani_link(token):
-    long_url = f"https://t.me/{(await Bot.get_me()).username}?start={token}"
-    api_url = f"https://gyanilinks.com/api?api={GYANI_API}&url={long_url}&alias={token}&format=text"
-
+async def shorten_with_gyanlinks(long_url):
+    api_url = f"https://gyanilinks.com/api?api={GYANLINKS_API}&url={long_url}&format=text"
     async with aiohttp.ClientSession() as session:
         async with session.get(api_url) as resp:
             return await resp.text()
+
+# ─────────────── BOT HANDLERS ─────────────── #
 
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(bot, message):
@@ -108,55 +106,64 @@ async def start(bot, message):
 async def verify_channels(bot, query):
     await query.message.delete()
     await query.message.reply(
-        "🙏 Welcome to NST Free Google Play Redeem Code Bot RS30-200 🎁\nClick On Generate Code",
+        "🙏 Welcome to NST Free Google Play Redeem Code Bot RS30-200 🪙\nClick On Generate Code",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
-# --- UPDATED: Generate Code with Verify Flow ---
 @Bot.on_callback_query(filters.regex("gen_code"))
 async def generate_code(bot, query):
     user_id = query.from_user.id
-    token = generate_random_hash()
-    pending_tokens[user_id] = token
+    link = get_current_link()
 
-    short_link = await create_gyani_link(token)
+    # Create GyanLinks short URL for verification
+    short_link = await shorten_with_gyanlinks(link)
 
     caption = (
-        "🔑 To unlock your redeem code:\n\n"
-        "1️⃣ Click **Verify (GyaniLinks)** and complete the short link.\n"
-        "2️⃣ After finishing, press **Verify Now ✅**.\n\n"
-        "If confused, click **How to Verify**."
+        "**🔑 Redeem Code Locked!**\n\n"
+        "👉 To unlock your code, first complete verification below.\n"
+        "⚡ After verifying, press **Verify now by clicking me✅** to get your code."
     )
 
-    buttons = [
-        [InlineKeyboardButton("Verify (GyaniLinks)", url=short_link)],
-        [InlineKeyboardButton("How to Verify ❓", url="https://t.me/kpslinkteam/52")],
-        [InlineKeyboardButton("Verify Now ✅", callback_data=f"verify_now:{token}")]
-    ]
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Verify (gyanlinks)", url=short_link)],
+        [InlineKeyboardButton("How to verify ❓", url="https://t.me/kpslinkteam/52")],
+        [InlineKeyboardButton("Verify now by clicking me✅", callback_data="final_verify")]
+    ])
 
-    await query.message.reply(caption, reply_markup=InlineKeyboardMarkup(buttons))
+    await query.message.delete()
+    await bot.send_message(
+        chat_id=user_id,
+        text=caption,
+        reply_markup=buttons
+    )
     await query.answer()
 
-# --- NEW: Final Verification Step ---
-@Bot.on_callback_query(filters.regex(r"verify_now:(.*)"))
-async def verify_now(bot, query):
+@Bot.on_callback_query(filters.regex("final_verify"))
+async def final_verify(bot, query):
     user_id = query.from_user.id
-    token = query.data.split(":")[1]
+    link = get_current_link()
 
-    if pending_tokens.get(user_id) == token:
-        del pending_tokens[user_id]
+    caption = (
+        "**✅ Verification Successful!**\n\n"
+        "🎁 Here is your redeem code link:\n"
+        f"[Click Me To Get Redeem Code]({link})\n\n"
+        "🔄 You can generate a new one every 1 hour."
+    )
 
-        link = get_current_link()
-        caption = (
-            "**🎉 Verified Successfully! 🎉**\n\n"
-            f"🔗 Code: [Click here to get your Redeem Code]({link})\n\n"
-            "💡 Next code available in 1 hour."
-        )
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Generate Again", callback_data="gen_code")]
+    ])
 
-        buttons = [[InlineKeyboardButton("Generate Again", callback_data="gen_code")]]
-        await bot.send_message(chat_id=user_id, text=caption, reply_markup=InlineKeyboardMarkup(buttons))
-    else:
-        await query.message.reply("❌ Verification failed. Please try again.")
+    await query.message.delete()
+    await bot.send_message(
+        chat_id=user_id,
+        text=caption,
+        reply_markup=buttons,
+        disable_web_page_preview=True
+    )
+    await query.answer("Verification passed ✅")
+
+# ─────────────── ADMIN COMMANDS ─────────────── #
 
 @Bot.on_message(filters.command("time") & filters.private)
 async def set_time_links(bot, message):
@@ -208,7 +215,8 @@ async def broadcast(bot, message):
             continue
     await message.reply(f"Broadcast sent to {count} users.")
 
-# Health check server
+# ─────────────── HEALTH SERVER ─────────────── #
+
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
