@@ -172,7 +172,7 @@ async def generate_code(bot, query):
         "3) Then you'll get a button **“Verify now by clicking me✅”**."
     )
     buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Verify (gyanlinks)", url=verify_url)],
+        [InlineKeyboardButton("Verify 🙂", url=verify_url)],
         [InlineKeyboardButton("How to verify ❓", url=HOW_TO_VERIFY_URL)],
     ])
 
@@ -205,9 +205,9 @@ async def final_verify(bot, query):
     # Send the redeem link
     link = get_current_link()
     caption = (
-        "✅ **Verification Successful!**\n\n"
-        f"🎁 **Redeem Code Link:** [Click Me To Get Redeem Code]({link})\n\n"
-        "🔄 You can generate again later."
+    "✅ Verification Successful!\n\n"
+    f"🎁 Redeem Code Link:- {link}\n\n"
+    "🔄 You can generate again later."
     )
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("Generate Again", callback_data="gen_code")]
