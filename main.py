@@ -41,6 +41,10 @@ FORCE_SUB_LINKS = [
 # Global cache for time links
 time_links_cache = {}
 
+# --- NEW: GyaniLinks API setup ---
+GYANI_API = "4be71cae8f3aeabe56467793a0ee8f20e0906f3a"
+pending_tokens = {}
+
 def load_time_links():
     global time_links_cache
     config = config_collection.find_one({"_id": "time_links"}) or {}
@@ -80,6 +84,15 @@ def get_current_link():
     else:
         return sorted_times[-1][1] if sorted_times else "https://modijiurl.com"
 
+# --- NEW: GyaniLinks shortener ---
+async def create_gyani_link(token):
+    long_url = f"https://t.me/{(await Bot.get_me()).username}?start={token}"
+    api_url = f"https://gyanilinks.com/api?api={GYANI_API}&url={long_url}&alias={token}&format=text"
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(api_url) as resp:
+            return await resp.text()
+
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(bot, message):
     user_id = message.from_user.id
@@ -95,34 +108,55 @@ async def start(bot, message):
 async def verify_channels(bot, query):
     await query.message.delete()
     await query.message.reply(
-        "🙏 Welcome to NST Free Google Play Redeem Code Bot RS30-200 🪙\nClick On Generate Code",
+        "🙏 Welcome to NST Free Google Play Redeem Code Bot RS30-200 🎁\nClick On Generate Code",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
+# --- UPDATED: Generate Code with Verify Flow ---
 @Bot.on_callback_query(filters.regex("gen_code"))
 async def generate_code(bot, query):
-    hash_code = generate_random_hash()
-    link = get_current_link()
-    image_url = "https://envs.sh/CCn.jpg"
+    user_id = query.from_user.id
+    token = generate_random_hash()
+    pending_tokens[user_id] = token
+
+    short_link = await create_gyani_link(token)
 
     caption = (
-        "**Your Redeem Code Generated successfully ✅**\n"
-        "✅ EVERY 1 HOURS YOU GET FREE CODES 💕•\n"
-        "❓“ IF ANY PROBLEM CONTACT HERE: @Paidpanelbot\n\n"
-        f"🔗”— **Code:** [Click Me To Get Redeem Code]({link})\n\n"
-        "📌“Œ **How to open link:** https://t.me/kpslinkteam/52"
+        "🔑 To unlock your redeem code:\n\n"
+        "1️⃣ Click **Verify (GyaniLinks)** and complete the short link.\n"
+        "2️⃣ After finishing, press **Verify Now ✅**.\n\n"
+        "If confused, click **How to Verify**."
     )
 
-    buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
+    buttons = [
+        [InlineKeyboardButton("Verify (GyaniLinks)", url=short_link)],
+        [InlineKeyboardButton("How to Verify ❓", url="https://t.me/kpslinkteam/52")],
+        [InlineKeyboardButton("Verify Now ✅", callback_data=f"verify_now:{token}")]
+    ]
 
-    await bot.send_photo(
-        chat_id=query.message.chat.id,
-        photo=image_url,
-        caption=caption,
-        reply_markup=buttons
-    )
-
+    await query.message.reply(caption, reply_markup=InlineKeyboardMarkup(buttons))
     await query.answer()
+
+# --- NEW: Final Verification Step ---
+@Bot.on_callback_query(filters.regex(r"verify_now:(.*)"))
+async def verify_now(bot, query):
+    user_id = query.from_user.id
+    token = query.data.split(":")[1]
+
+    if pending_tokens.get(user_id) == token:
+        del pending_tokens[user_id]
+
+        link = get_current_link()
+        caption = (
+            "**🎉 Verified Successfully! 🎉**\n\n"
+            f"🔗 Code: [Click here to get your Redeem Code]({link})\n\n"
+            "💡 Next code available in 1 hour."
+        )
+
+        buttons = [[InlineKeyboardButton("Generate Again", callback_data="gen_code")]]
+        await bot.send_message(chat_id=user_id, text=caption, reply_markup=InlineKeyboardMarkup(buttons))
+    else:
+        await query.message.reply("❌ Verification failed. Please try again.")
 
 @Bot.on_message(filters.command("time") & filters.private)
 async def set_time_links(bot, message):
@@ -144,7 +178,7 @@ async def set_time_links(bot, message):
 
         config_collection.update_one({"_id": "time_links"}, {"$set": {"links": new_links}}, upsert=True)
         load_time_links()
-        await message.reply(f"âœ… Time links updated successfully!\n\nTotal {len(new_links)} timings set.")
+        await message.reply(f"✅ Time links updated successfully!\n\nTotal {len(new_links)} timings set.")
     except Exception:
         await message.reply("Usage:\n/time\n6:00am https://link1.com\n6:30am https://link2.com")
 
