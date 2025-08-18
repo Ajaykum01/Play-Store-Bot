@@ -11,7 +11,6 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from datetime import datetime
-import pytz
 
 load_dotenv()
 
@@ -41,37 +40,25 @@ FORCE_SUB_LINKS = [
     "https://t.me/+hXaGwny7nVo3NDM9",
 ]
 
-# Your GyanLinks API token (from your message)
+# Your GyanLinks API token
 GYANLINKS_API = "4be71cae8f3aeabe56467793a0ee8f20e0906f3a"
 
-# ───────────────── Time-based links ───────────────── #
-time_links_cache = {}
+# ───────────────── Codes instead of timed links ───────────────── #
+def load_codes():
+    config = config_collection.find_one({"_id": "codes"}) or {}
+    return config.get("codes", [])
 
-def load_time_links():
-    global time_links_cache
-    config = config_collection.find_one({"_id": "time_links"}) or {}
-    time_links_cache = config.get("links", {}) or {}
+def save_codes(codes: list):
+    config_collection.update_one({"_id": "codes"}, {"$set": {"codes": codes}}, upsert=True)
 
-def parse_time_str(time_str: str):
-    try:
-        return datetime.strptime(time_str, "%I:%M%p").time()
-    except:
-        return datetime.strptime(time_str, "%I%p").time()
-
-def get_current_link():
-    if not time_links_cache:
-        load_time_links()
-    ist = pytz.timezone('Asia/Kolkata')
-    now = datetime.now(ist).time()
-
-    sorted_times = sorted(time_links_cache.items(), key=lambda x: parse_time_str(x[0]))
-    last_link = None
-    for time_str, link in sorted_times:
-        if now >= parse_time_str(time_str):
-            last_link = link
-        else:
-            break
-    return last_link or (sorted_times[-1][1] if sorted_times else "https://modijiurl.com")
+def get_current_code():
+    codes = load_codes()
+    if not codes:
+        return None  # no codes left
+    # Pop the first unused code
+    code = codes.pop(0)
+    save_codes(codes)
+    return code
 
 # ───────────────── Helpers ───────────────── #
 def gen_token(n: int = 16) -> str:
@@ -79,17 +66,15 @@ def gen_token(n: int = 16) -> str:
     return ''.join(random.choices(alphabet, k=n))
 
 async def shorten_with_gyanlinks(long_url: str) -> str:
-    # GyanLinks expects a fully qualified URL
     encoded_url = urllib.parse.quote_plus(long_url)
     api_url = f"https://gyanilinks.com/api?api={GYANLINKS_API}&url={encoded_url}&format=text"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(api_url, timeout=20) as resp:
                 text = (await resp.text()).strip()
-                # GyanLinks returns empty text on error; ensure valid https URL
                 if text.startswith("http"):
                     return text
-                return ""  # signal failure
+                return ""  # failed
     except Exception:
         return ""
 
@@ -97,7 +82,6 @@ async def build_verify_link(bot: Client, token: str) -> str:
     me = await bot.get_me()
     deep_link = f"https://t.me/{me.username}?start=GL{token}"
     short = await shorten_with_gyanlinks(deep_link)
-    # Fallback to deep link if shortener failed to avoid BUTTON_URL_INVALID
     return short or deep_link
 
 def ensure_user(user_id: int):
@@ -110,7 +94,6 @@ async def start(bot, message):
     user_id = message.from_user.id
     ensure_user(user_id)
 
-    # Handle deep-link payload: /start GL<token>
     if len(message.command) > 1:
         payload = message.command[1]
         if payload.startswith("GL"):
@@ -125,7 +108,6 @@ async def start(bot, message):
             if tok.get("used"):
                 return await message.reply("ℹ️ This token is already verified. Tap **Generate Again** to start over.")
 
-            # Show the dedicated Verify Now button
             btn = InlineKeyboardMarkup([
                 [InlineKeyboardButton("Verify now by clicking me✅", callback_data=f"final_verify:{token}")]
             ])
@@ -134,7 +116,6 @@ async def start(bot, message):
                 reply_markup=btn
             )
 
-    # Default welcome (no payload)
     buttons = [[InlineKeyboardButton("Subscribe Channel 😎", url=url)] for url in FORCE_SUB_LINKS]
     buttons.append([InlineKeyboardButton("Verify ✅", callback_data="verify")])
     await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=InlineKeyboardMarkup(buttons))
@@ -152,7 +133,6 @@ async def generate_code(bot, query):
     user_id = query.from_user.id
     ensure_user(user_id)
 
-    # Create a pending token bound to this user
     token = gen_token()
     tokens_collection.insert_one({
         "_id": token,
@@ -161,10 +141,8 @@ async def generate_code(bot, query):
         "created_at": datetime.utcnow()
     })
 
-    # Build the verification link (goes through GyanLinks → redirects back to bot deep link)
     verify_url = await build_verify_link(bot, token)
 
-    # Show ONLY "Verify (gyanlinks)" and "How to verify"
     caption = (
         "🔐 **Verification Required**\n\n"
         "1) Tap **Verify (gyanlinks)** and complete the steps.\n"
@@ -199,16 +177,18 @@ async def final_verify(bot, query):
     if tok.get("used"):
         return await query.answer("Token already verified. Use Generate Again.", show_alert=True)
 
-    # Mark token used
     tokens_collection.update_one({"_id": token}, {"$set": {"used": True, "used_at": datetime.utcnow()}})
 
-    # Send the redeem link
-    link = get_current_link()
-    caption = (
-    "✅ Verification Successful!\n\n"
-    f"🎁 Redeem Code Link:- {link}\n\n"
-    "🔄 You can generate again later."
-    )
+    code = get_current_code()
+    if not code:
+        caption = "❌ No redeem codes available right now. Please try again later."
+    else:
+        caption = (
+            "✅ Verification Successful!\n\n"
+            f"🎁 Redeem Code:- `{code}`\n\n"
+            "🔄 You can generate again later."
+        )
+
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("Generate Again", callback_data="gen_code")]
     ])
@@ -223,35 +203,19 @@ async def final_verify(bot, query):
 
 # ───────────────── Admin ───────────────── #
 @Bot.on_message(filters.command("time") & filters.private)
-async def set_time_links(bot, message):
+async def set_codes(bot, message):
     if message.from_user.id not in ADMINS:
         return await message.reply("You are not authorized to use this command.")
-    try:
-        text = message.text.split(None, 1)[1]
-        lines = text.strip().splitlines()
-        new_links = {}
-        for line in lines:
-            parts = line.strip().split(None, 1)
-            if len(parts) != 2:
-                return await message.reply("Invalid format. Use:\n`6:00am https://link.com`")
-            time_str, url = parts
-            parse_time_str(time_str.lower())  # validate
-            new_links[time_str.lower()] = url
-        config_collection.update_one({"_id": "time_links"}, {"$set": {"links": new_links}}, upsert=True)
-        load_time_links()
-        await message.reply(f"✅ Time links updated successfully!\n\nTotal {len(new_links)} timings set.")
-    except Exception:
-        await message.reply("Usage:\n/time\n6:00am https://link1.com\n6:30am https://link2.com")
 
-@Bot.on_message(filters.command("setlink") & filters.private)
-async def set_link(bot, message):
-    if message.from_user.id not in ADMINS:
-        return await message.reply("You are not authorized to use this command.")
-    if len(message.command) < 2:
-        return await message.reply("Usage: /setlink <url>")
-    url = message.text.split(None, 1)[1]
-    config_collection.update_one({"_id": "config"}, {"$set": {"redeem_url": url}}, upsert=True)
-    await message.reply("Default redeem link updated successfully.")
+    try:
+        parts = message.text.split()[1:]  # skip "/time"
+        if not parts:
+            return await message.reply("Usage: /time CODE1 CODE2 CODE3 ...")
+
+        save_codes(parts)
+        await message.reply(f"✅ Codes updated successfully!\n\nTotal {len(parts)} codes set.")
+    except Exception as e:
+        await message.reply(f"Error: {e}")
 
 @Bot.on_message(filters.command("broadcast") & filters.private)
 async def broadcast(bot, message):
@@ -288,6 +252,4 @@ def run_server():
 # ───────────────── Main ───────────────── #
 if __name__ == "__main__":
     threading.Thread(target=run_server, daemon=True).start()
-    load_time_links()
-    # Removed the old auto_ping that called Bot.start() (caused conflicts)
     Bot.run()
