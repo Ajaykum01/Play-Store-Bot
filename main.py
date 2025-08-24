@@ -41,7 +41,7 @@ FORCE_SUB_LINKS = [
 ]
 
 # Your GyanLinks API token
-GYANLINKS_API = "4be71cae8f3aeabe56467793a0ee8f20e0906f3a"
+GYANLINKS_API = "7a04b0ba40696303483cd4be8541a1a8d831141f"
 
 # ───────────────── Codes instead of timed links ───────────────── #
 def load_codes():
@@ -145,7 +145,7 @@ async def generate_code(bot, query):
 
     caption = (
         "🔐 **Verification Required**\n\n"
-        "1) Tap **Verify (gyanlinks)** and complete the steps.\n"
+        "1) Tap **Verify (Click me)** and complete the steps.\n"
         "2) When you press **Get Link** there, you'll return here automatically.\n"
         "3) Then you'll get a button **“Verify now by clicking me✅”**."
     )
