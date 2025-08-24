@@ -40,8 +40,8 @@ FORCE_SUB_LINKS = [
     "https://t.me/+hXaGwny7nVo3NDM9",
 ]
 
-# Your GyanLinks API token
-GYANLINKS_API = "7a04b0ba40696303483cd4be8541a1a8d831141f"
+# ───────────────── AroLinks API ───────────────── #
+AROLINKS_API = "7a04b0ba40696303483cd4be8541a1a8d831141f"
 
 # ───────────────── Codes instead of timed links ───────────────── #
 def load_codes():
@@ -55,8 +55,7 @@ def get_current_code():
     codes = load_codes()
     if not codes:
         return None  # no codes left
-    # Pop the first unused code
-    code = codes.pop(0)
+    code = codes.pop(0)  # take first
     save_codes(codes)
     return code
 
@@ -65,9 +64,9 @@ def gen_token(n: int = 16) -> str:
     alphabet = string.ascii_letters + string.digits
     return ''.join(random.choices(alphabet, k=n))
 
-async def shorten_with_gyanlinks(long_url: str) -> str:
+async def shorten_with_arolinks(long_url: str) -> str:
     encoded_url = urllib.parse.quote_plus(long_url)
-    api_url = f"https://gyanilinks.com/api?api={GYANLINKS_API}&url={encoded_url}&format=text"
+    api_url = f"https://arolinks.com/api?api={AROLINKS_API}&url={encoded_url}&format=text"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(api_url, timeout=20) as resp:
@@ -81,7 +80,7 @@ async def shorten_with_gyanlinks(long_url: str) -> str:
 async def build_verify_link(bot: Client, token: str) -> str:
     me = await bot.get_me()
     deep_link = f"https://t.me/{me.username}?start=GL{token}"
-    short = await shorten_with_gyanlinks(deep_link)
+    short = await shorten_with_arolinks(deep_link)
     return short or deep_link
 
 def ensure_user(user_id: int):
