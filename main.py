@@ -34,10 +34,9 @@ Bot = Client(
 
 HOW_TO_VERIFY_URL = "https://t.me/kpslinkteam/52"
 FORCE_SUB_LINKS = [
-    "https://yt.openinapp.co/fatz4",
+    "https://telegram.me/+Iyc7cjYrBpxlOWM1",
     "https://yt.openinapp.co/u4hem",
-    "https://t.me/+JJdz2hyOVRYyNzE1",
-    "https://t.me/+hXaGwny7nVo3NDM9",
+    "https://telegram.me/ffunusedaccountbot",
 ]
 
 # ───────────────── AroLinks API ───────────────── #
