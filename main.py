@@ -35,7 +35,7 @@ Bot = Client(
 HOW_TO_VERIFY_URL = "https://t.me/kpslinkteam/52"
 FORCE_SUB_LINKS = [
     "https://telegram.me/+Iyc7cjYrBpxlOWM1",
-    "https://yt.openinapp.co/u4hem",
+    "https://telegram.me/+poyQjeODmb0wMjhl",
     "https://telegram.me/ffunusedaccountbot",
 ]
 
