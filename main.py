@@ -39,9 +39,8 @@ FORCE_SUB_LINKS = [
     "https://telegram.me/ffunusedaccountbot",
 ]
 
-# ───────────────── Shortener APIs ───────────────── #
-AROLINKS_API = "7a04b0ba40696303483cd4be8541a1a8d831141f"
-TVKURL_API = "7014323a1665c3b52191b05a24e369b6342179ab"
+# ───────────────── AroLinks API ───────────────── #
+AROLINKS_API = "7014323a1665c3b52191b05a24e369b6342179ab"
 
 # ───────────────── Codes instead of timed links ───────────────── #
 def load_codes():
@@ -64,36 +63,23 @@ def gen_token(n: int = 16) -> str:
     alphabet = string.ascii_letters + string.digits
     return ''.join(random.choices(alphabet, k=n))
 
-async def shorten_url(long_url: str) -> str:
-    # First Step: Shorten with AroLinks
-    encoded_url1 = urllib.parse.quote_plus(long_url)
-    api_url1 = f"https://arolinks.com/api?api={AROLINKS_API}&url={encoded_url1}&format=text"
-    
-    final_link = ""
+async def shorten_with_arolinks(long_url: str) -> str:
+    encoded_url = urllib.parse.quote_plus(long_url)
+    api_url = f"https://tvkurl.page.gd/api?api={AROLINKS_API}&url={encoded_url}&format=text"
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(api_url1, timeout=20) as resp1:
-                res1 = (await resp1.text()).strip()
-                if not res1.startswith("http"):
-                    return "" # failed first step
-                
-                # Second Step: Shorten the AroLink with TVK URL
-                encoded_url2 = urllib.parse.quote_plus(res1)
-                api_url2 = f"https://tvkurl.page.gd/api?api={TVKURL_API}&url={encoded_url2}&format=text"
-                
-                async with session.get(api_url2, timeout=20) as resp2:
-                    res2 = (await resp2.text()).strip()
-                    if res2.startswith("http"):
-                        final_link = res2
+            async with session.get(api_url, timeout=20) as resp:
+                text = (await resp.text()).strip()
+                if text.startswith("http"):
+                    return text
+                return ""  # failed
     except Exception:
-        pass
-    
-    return final_link
+        return ""
 
 async def build_verify_link(bot: Client, token: str) -> str:
     me = await bot.get_me()
     deep_link = f"https://t.me/{me.username}?start=GL{token}"
-    short = await shorten_url(deep_link)
+    short = await shorten_with_arolinks(deep_link)
     return short or deep_link
 
 def ensure_user(user_id: int):
