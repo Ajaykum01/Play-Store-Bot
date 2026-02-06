@@ -39,8 +39,8 @@ FORCE_SUB_LINKS = [
     "https://telegram.me/ffunusedaccountbot",
 ]
 
-# ───────────────── AroLinks API ───────────────── #
-AROLINKS_API = "7014323a1665c3b52191b05a24e369b6342179ab"
+# ───────────────── TVK URL API ───────────────── #
+TVKURL_API = "7014323a1665c3b52191b05a24e369b6342179ab"
 
 # ───────────────── Codes instead of timed links ───────────────── #
 def load_codes():
@@ -63,9 +63,10 @@ def gen_token(n: int = 16) -> str:
     alphabet = string.ascii_letters + string.digits
     return ''.join(random.choices(alphabet, k=n))
 
-async def shorten_with_arolinks(long_url: str) -> str:
+async def shorten_with_tvkurl(long_url: str) -> str:
     encoded_url = urllib.parse.quote_plus(long_url)
-    api_url = f"https://tvkurl.page.gd/api?api={AROLINKS_API}&url={encoded_url}&format=text"
+    # Using Plain Text Response format as requested
+    api_url = f"https://tvkurl.page.gd/api?api={TVKURL_API}&url={encoded_url}&format=text"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(api_url, timeout=20) as resp:
@@ -79,7 +80,7 @@ async def shorten_with_arolinks(long_url: str) -> str:
 async def build_verify_link(bot: Client, token: str) -> str:
     me = await bot.get_me()
     deep_link = f"https://t.me/{me.username}?start=GL{token}"
-    short = await shorten_with_arolinks(deep_link)
+    short = await shorten_with_tvkurl(deep_link)
     return short or deep_link
 
 def ensure_user(user_id: int):
