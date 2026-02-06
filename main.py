@@ -5,17 +5,12 @@ import string
 import asyncio
 import aiohttp
 import urllib.parse
-import logging
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from datetime import datetime
-
-# Enable logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -25,7 +20,7 @@ client = MongoClient(MONGO_URL)
 db = client["telegram_bot"]
 config_collection = db["config"]
 users_collection = db["users"]
-tokens_collection = db["tokens"]
+tokens_collection = db["tokens"]  # for verification tokens
 
 ADMINS = [int(i) for i in os.getenv("ADMINS", "2117119246").split()]
 
@@ -44,10 +39,10 @@ FORCE_SUB_LINKS = [
     "https://telegram.me/ffunusedaccountbot",
 ]
 
-# ───────────────── TVK URL API ───────────────── #
-TVKURL_API = "7014323a1665c3b52191b05a24e369b6342179ab"
+# ───────────────── AroLinks API ───────────────── #
+AROLINKS_API = "7a04b0ba40696303483cd4be8541a1a8d831141f"
 
-# ───────────────── Codes ───────────────── #
+# ───────────────── Codes instead of timed links ───────────────── #
 def load_codes():
     config = config_collection.find_one({"_id": "codes"}) or {}
     return config.get("codes", [])
@@ -58,8 +53,8 @@ def save_codes(codes: list):
 def get_current_code():
     codes = load_codes()
     if not codes:
-        return None
-    code = codes.pop(0)
+        return None  # no codes left
+    code = codes.pop(0)  # take first
     save_codes(codes)
     return code
 
@@ -68,35 +63,23 @@ def gen_token(n: int = 16) -> str:
     alphabet = string.ascii_letters + string.digits
     return ''.join(random.choices(alphabet, k=n))
 
-async def shorten_with_tvkurl(long_url: str) -> str:
+async def shorten_with_arolinks(long_url: str) -> str:
     encoded_url = urllib.parse.quote_plus(long_url)
-    api_url = f"https://tvkurl.page.gd/api?api={TVKURL_API}&url={encoded_url}&format=text"
-    
-    # Implementing your PHP Fixes in Python:
-    # 1. User-Agent pretending to be a browser
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-    }
-    
+    api_url = f"https://arolinks.com/api?api={AROLINKS_API}&url={encoded_url}&format=text"
     try:
-        # 2. SSL bypass (verify_ssl=False) and 3. Timeout (10 seconds)
-        connector = aiohttp.TCPConnector(ssl=False)
-        async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
-            async with session.get(api_url, timeout=10) as resp:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, timeout=20) as resp:
                 text = (await resp.text()).strip()
                 if text.startswith("http"):
                     return text
-                else:
-                    logger.error(f"TVK API Error: {text}")
-                    return ""
-    except Exception as e:
-        logger.error(f"Connection Error: {e}")
+                return ""  # failed
+    except Exception:
         return ""
 
 async def build_verify_link(bot: Client, token: str) -> str:
     me = await bot.get_me()
     deep_link = f"https://t.me/{me.username}?start=GL{token}"
-    short = await shorten_with_tvkurl(deep_link)
+    short = await shorten_with_arolinks(deep_link)
     return short or deep_link
 
 def ensure_user(user_id: int):
@@ -118,10 +101,10 @@ async def start(bot, message):
                 return await message.reply("⚠️ Token not found or expired. Tap **Generate Code** again.")
 
             if tok.get("user_id") != user_id:
-                return await message.reply("⚠️ This verification link belongs to another account.")
+                return await message.reply("⚠️ This verification link belongs to another account. Please generate your own.")
 
             if tok.get("used"):
-                return await message.reply("ℹ️ Already verified. Tap **Generate Again**.")
+                return await message.reply("ℹ️ This token is already verified. Tap **Generate Again** to start over.")
 
             btn = InlineKeyboardMarkup([
                 [InlineKeyboardButton("Verify now by clicking me✅", callback_data=f"final_verify:{token}")]
@@ -186,15 +169,27 @@ async def final_verify(bot, query):
     if not tok:
         return await query.answer("Token not found or expired.", show_alert=True)
 
+    if tok.get("user_id") != user_id:
+        return await query.answer("This token belongs to another account.", show_alert=True)
+
+    if tok.get("used"):
+        return await query.answer("Token already verified. Use Generate Again.", show_alert=True)
+
     tokens_collection.update_one({"_id": token}, {"$set": {"used": True, "used_at": datetime.utcnow()}})
 
     code = get_current_code()
     if not code:
-        caption = "❌ No redeem codes available right now."
+        caption = "❌ No redeem codes available right now. Please try again later."
     else:
-        caption = f"✅ Verification Successful!\n\n🎁 Redeem Code:- `{code}`\n\n🔄 You can generate again later."
+        caption = (
+            "✅ Verification Successful!\n\n"
+            f"🎁 Redeem Code:- `{code}`\n\n"
+            "🔄 You can generate again later."
+        )
 
-    buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]])
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Generate Again", callback_data="gen_code")]
+    ])
 
     try:
         await query.message.delete()
@@ -207,34 +202,50 @@ async def final_verify(bot, query):
 # ───────────────── Admin ───────────────── #
 @Bot.on_message(filters.command("time") & filters.private)
 async def set_codes(bot, message):
-    if message.from_user.id not in ADMINS: return
-    parts = message.text.split()[1:]
-    if not parts: return await message.reply("Usage: /time CODE1 CODE2 ...")
-    save_codes(parts)
-    await message.reply(f"✅ Codes updated! Total: {len(parts)}")
+    if message.from_user.id not in ADMINS:
+        return await message.reply("You are not authorized to use this command.")
+
+    try:
+        parts = message.text.split()[1:]  # skip "/time"
+        if not parts:
+            return await message.reply("Usage: /time CODE1 CODE2 CODE3 ...")
+
+        save_codes(parts)
+        await message.reply(f"✅ Codes updated successfully!\n\nTotal {len(parts)} codes set.")
+    except Exception as e:
+        await message.reply(f"Error: {e}")
 
 @Bot.on_message(filters.command("broadcast") & filters.private)
 async def broadcast(bot, message):
-    if message.from_user.id not in ADMINS: return
-    if len(message.command) < 2: return
-    text = message.text.split(None, 1)[1]
+    if message.from_user.id not in ADMINS:
+        return await message.reply("You are not authorized to use this command.")
+    if len(message.command) < 2:
+        return await message.reply("Usage: /broadcast <your message>")
+    broadcast_text = message.text.split(None, 1)[1]
     count = 0
     for user in users_collection.find():
         try:
-            await bot.send_message(user['_id'], text)
+            await bot.send_message(chat_id=user['_id'], text=broadcast_text)
             count += 1
-        except: continue
-    await message.reply(f"Sent to {count} users.")
+        except:
+            continue
+    await message.reply(f"Broadcast sent to {count} users.")
 
 # ───────────────── Health Check ───────────────── #
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
+        self.send_header("Content-type", "text/plain")
         self.end_headers()
-        self.wfile.write(b"Bot Alive")
+        self.wfile.write(b"Bot is Alive!")
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
 
 def run_server():
-    HTTPServer(("0.0.0.0", 8080), HealthCheckHandler).serve_forever()
+    server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
+    server.serve_forever()
 
 # ───────────────── Main ───────────────── #
 if __name__ == "__main__":
