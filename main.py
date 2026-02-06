@@ -39,8 +39,9 @@ FORCE_SUB_LINKS = [
     "https://telegram.me/ffunusedaccountbot",
 ]
 
-# ───────────────── AroLinks API ───────────────── #
+# ───────────────── Shortener APIs ───────────────── #
 AROLINKS_API = "7a04b0ba40696303483cd4be8541a1a8d831141f"
+TVKURL_API = "7014323a1665c3b52191b05a24e369b6342179ab"
 
 # ───────────────── Codes instead of timed links ───────────────── #
 def load_codes():
@@ -63,6 +64,19 @@ def gen_token(n: int = 16) -> str:
     alphabet = string.ascii_letters + string.digits
     return ''.join(random.choices(alphabet, k=n))
 
+async def shorten_with_tvkurl(long_url: str) -> str:
+    encoded_url = urllib.parse.quote_plus(long_url)
+    api_url = f"https://tvkurl.page.gd/api?api={TVKURL_API}&url={encoded_url}&format=text"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, timeout=20) as resp:
+                text = (await resp.text()).strip()
+                if text.startswith("http"):
+                    return text
+                return ""
+    except Exception:
+        return ""
+
 async def shorten_with_arolinks(long_url: str) -> str:
     encoded_url = urllib.parse.quote_plus(long_url)
     api_url = f"https://arolinks.com/api?api={AROLINKS_API}&url={encoded_url}&format=text"
@@ -72,15 +86,22 @@ async def shorten_with_arolinks(long_url: str) -> str:
                 text = (await resp.text()).strip()
                 if text.startswith("http"):
                     return text
-                return ""  # failed
+                return ""
     except Exception:
         return ""
 
 async def build_verify_link(bot: Client, token: str) -> str:
     me = await bot.get_me()
     deep_link = f"https://t.me/{me.username}?start=GL{token}"
-    short = await shorten_with_arolinks(deep_link)
-    return short or deep_link
+    
+    # First Step: Shorten with TVK URL
+    tvk_short = await shorten_with_tvkurl(deep_link)
+    base_url = tvk_short if tvk_short else deep_link
+    
+    # Second Step: Shorten with AroLinks
+    final_short = await shorten_with_arolinks(base_url)
+    
+    return final_short or base_url
 
 def ensure_user(user_id: int):
     if not users_collection.find_one({"_id": user_id}):
@@ -183,7 +204,7 @@ async def final_verify(bot, query):
     else:
         caption = (
             "✅ Verification Successful!\n\n"
-            f"🎁 Redeem Code:- `{code}`\n\n"
+             f"🎁 Redeem Code:- `{code}`\n\n"
             "🔄 You can generate again later."
         )
 
