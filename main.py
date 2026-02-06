@@ -5,12 +5,17 @@ import string
 import asyncio
 import aiohttp
 import urllib.parse
+import logging
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from datetime import datetime
+
+# Enable logging to help you find errors in your files/logs
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -65,16 +70,20 @@ def gen_token(n: int = 16) -> str:
 
 async def shorten_with_tvkurl(long_url: str) -> str:
     encoded_url = urllib.parse.quote_plus(long_url)
-    # Using Plain Text Response format as requested
+    # Using the exact API structure you provided
     api_url = f"https://tvkurl.page.gd/api?api={TVKURL_API}&url={encoded_url}&format=text"
+    
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(api_url, timeout=20) as resp:
                 text = (await resp.text()).strip()
                 if text.startswith("http"):
                     return text
-                return ""  # failed
-    except Exception:
+                else:
+                    logger.error(f"TVK API Error or non-link response: {text}")
+                    return "" 
+    except Exception as e:
+        logger.error(f"Failed to connect to TVK API: {e}")
         return ""
 
 async def build_verify_link(bot: Client, token: str) -> str:
@@ -207,7 +216,7 @@ async def set_codes(bot, message):
         return await message.reply("You are not authorized to use this command.")
 
     try:
-        parts = message.text.split()[1:]  # skip "/time"
+        parts = message.text.split()[1:]
         if not parts:
             return await message.reply("Usage: /time CODE1 CODE2 CODE3 ...")
 
@@ -239,10 +248,6 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "text/plain")
         self.end_headers()
         self.wfile.write(b"Bot is Alive!")
-
-    def do_HEAD(self):
-        self.send_response(200)
-        self.end_headers()
 
 def run_server():
     server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
