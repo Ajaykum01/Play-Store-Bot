@@ -40,7 +40,7 @@ FORCE_SUB_LINKS = [
 ]
 
 # ───────────────── AroLinks API ───────────────── #
-AROLINKS_API = "7a04b0ba40696303483cd4be8541a1a8d831141f"
+AROLINKS_API = "9986767adc94f9d0a46a66fe436a9ba577c74f1f"
 
 # ───────────────── Codes instead of timed links ───────────────── #
 def load_codes():
@@ -65,7 +65,7 @@ def gen_token(n: int = 16) -> str:
 
 async def shorten_with_arolinks(long_url: str) -> str:
     encoded_url = urllib.parse.quote_plus(long_url)
-    api_url = f"https://arolinks.com/api?api={AROLINKS_API}&url={encoded_url}&format=text"
+    api_url = f"https://tvkurl.site/api?api={AROLINKS_API}&url={encoded_url}&format=text"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(api_url, timeout=20) as resp:
