@@ -14,7 +14,7 @@ from datetime import datetime
 
 load_dotenv()
 
-# ───────────────── MongoDB ───────────────── #
+# ───────────────── MongoDB ─────────────────
 MONGO_URL = os.getenv("MONGO_URL")
 client = MongoClient(MONGO_URL)
 db = client["telegram_bot"]
@@ -24,7 +24,7 @@ tokens_collection = db["tokens"]
 
 ADMINS = [int(i) for i in os.getenv("ADMINS", "2117119246").split()]
 
-# ───────────────── Bot ───────────────── #
+# ───────────────── Bot ─────────────────
 Bot = Client(
     "Play-Store-Bot",
     bot_token=os.environ["BOT_TOKEN"],
@@ -39,13 +39,11 @@ FORCE_SUB_LINKS = [
     "https://telegram.me/ffunusedaccountbot",
 ]
 
-# ───────────────── APIs ───────────────── #
+# ───────────────── API CONFIG ─────────────────
 AROLINKS_API = "7a04b0ba40696303483cd4be8541a1a8d831141f"
+TVKURL_API = "9986767adc94f9d0a46a66fe436a9ba577c74f1f"
 
-TVK_API = "9986767adc94f9d0a46a66fe436a9ba577c74f1f"
-TVK_API_ENDPOINT = "https://tvkurl.com/api"
-
-# ───────────────── Codes ───────────────── #
+# ───────────────── Codes Logic ─────────────────
 def load_codes():
     config = config_collection.find_one({"_id": "codes"}) or {}
     return config.get("codes", [])
@@ -61,92 +59,81 @@ def get_current_code():
     save_codes(codes)
     return code
 
-# ───────────────── Helpers ───────────────── #
+# ───────────────── Helpers ─────────────────
 def gen_token(n: int = 16) -> str:
     alphabet = string.ascii_letters + string.digits
     return ''.join(random.choices(alphabet, k=n))
 
-async def shorten_with_tvk(long_url: str) -> str:
-    params = {
-        "api": TVK_API,
-        "url": long_url,
-        "format": "text"
-    }
+async def shorten_with_tvkurl(long_url: str) -> str:
+    """Shortens the link using TVKURL API first"""
+    encoded_url = urllib.parse.quote_plus(long_url)
+    api_url = f"https://tvkurl.com/api?api={TVKURL_API}&url={encoded_url}&format=text"
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(TVK_API_ENDPOINT, params=params, timeout=20) as resp:
+            async with session.get(api_url, timeout=20) as resp:
                 text = (await resp.text()).strip()
-                if text.startswith("http"):
-                    return text
-                return ""
+                return text if text.startswith("http") else long_url
     except Exception:
-        return ""
+        return long_url
 
 async def shorten_with_arolinks(long_url: str) -> str:
+    """Shortens the already shortened TVK link with Arolinks"""
     encoded_url = urllib.parse.quote_plus(long_url)
     api_url = f"https://arolinks.com/api?api={AROLINKS_API}&url={encoded_url}&format=text"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(api_url, timeout=20) as resp:
                 text = (await resp.text()).strip()
-                if text.startswith("http"):
-                    return text
-                return ""
+                return text if text.startswith("http") else long_url
     except Exception:
-        return ""
+        return long_url
 
 async def build_verify_link(bot: Client, token: str) -> str:
     me = await bot.get_me()
     deep_link = f"https://t.me/{me.username}?start=GL{token}"
-
-    tvk_short = await shorten_with_tvk(deep_link)
-    if not tvk_short:
-        tvk_short = deep_link
-
-    aro_short = await shorten_with_arolinks(tvk_short)
-    return aro_short or tvk_short
+    
+    # Nested Shortening: Tvkurl -> Arolinks
+    tvk_short = await shorten_with_tvkurl(deep_link)
+    final_short = await shorten_with_arolinks(tvk_short)
+    
+    return final_short
 
 def ensure_user(user_id: int):
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
 
-# ───────────────── Handlers ───────────────── #
+# ───────────────── Handlers ─────────────────
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(bot, message):
     user_id = message.from_user.id
     ensure_user(user_id)
 
-    if len(message.command) > 1:
-        payload = message.command[1]
-        if payload.startswith("GL"):
-            token = payload[2:]
-            tok = tokens_collection.find_one({"_id": token})
-            if not tok:
-                return await message.reply("⚠️ Token not found or expired.")
+    if len(message.command) > 1:  
+        payload = message.command[1]  
+        if payload.startswith("GL"):  
+            token = payload[2:]  
+            tok = tokens_collection.find_one({"_id": token})  
+            if not tok:  
+                return await message.reply("⚠️ Token not found or expired.")  
 
-            if tok.get("user_id") != user_id:
-                return await message.reply("⚠️ This link belongs to another user.")
+            if tok.get("user_id") != user_id:  
+                return await message.reply("⚠️ This link belongs to another account.")  
 
-            if tok.get("used"):
-                return await message.reply("ℹ️ Token already verified.")
+            if tok.get("used"):  
+                return await message.reply("ℹ️ Already verified.")  
 
-            btn = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Verify now by clicking me✅", callback_data=f"final_verify:{token}")]
-            ])
-            return await message.reply(
-                "✅ Short link completed!\n\nTap the button below to complete verification.",
-                reply_markup=btn
-            )
+            btn = InlineKeyboardMarkup([[InlineKeyboardButton("Verify now by clicking me✅", callback_data=f"final_verify:{token}")]])  
+            return await message.reply("✅ Redirection completed!\n\nTap below to claim your code.", reply_markup=btn)  
 
-    buttons = [[InlineKeyboardButton("Subscribe Channel 😎", url=url)] for url in FORCE_SUB_LINKS]
-    buttons.append([InlineKeyboardButton("Verify ✅", callback_data="verify")])
+    buttons = [[InlineKeyboardButton("Subscribe Channel 😎", url=url)] for url in FORCE_SUB_LINKS]  
+    buttons.append([InlineKeyboardButton("Verify ✅", callback_data="verify")])  
     await message.reply("**JOIN GIVEN CHANNEL TO GET REDEEM CODE**", reply_markup=InlineKeyboardMarkup(buttons))
 
 @Bot.on_callback_query(filters.regex("^verify$"))
 async def verify_channels(bot, query):
     await query.message.delete()
     await query.message.reply(
-        "🙏 Welcome to NST Free Google Play Redeem Code Bot RS30-200 🪙",
+        "🙏 Welcome to NST Free Google Play Redeem Code Bot\nClick Generate Code to start.",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Code", callback_data="gen_code")]])
     )
 
@@ -154,79 +141,54 @@ async def verify_channels(bot, query):
 async def generate_code(bot, query):
     user_id = query.from_user.id
     ensure_user(user_id)
+    token = gen_token()  
+    tokens_collection.insert_one({"_id": token, "user_id": user_id, "used": False, "created_at": datetime.utcnow()})  
 
-    token = gen_token()
-    tokens_collection.insert_one({
-        "_id": token,
-        "user_id": user_id,
-        "used": False,
-        "created_at": datetime.utcnow()
-    })
+    # This calls the nested shortening function
+    verify_url = await build_verify_link(bot, token)  
 
-    verify_url = await build_verify_link(bot, token)
+    caption = "🔐 **Verification Required**\n\nStep 1: Complete Arolinks\nStep 2: Complete Tvkurl\nStep 3: Get your Code!"
+    buttons = InlineKeyboardMarkup([[InlineKeyboardButton("Verify 🙂", url=verify_url)], [InlineKeyboardButton("How to verify ❓", url=HOW_TO_VERIFY_URL)]])  
+    
+    try: await query.message.delete()
+    except: pass  
 
-    caption = (
-        "🔐 **Verification Required**\n\n"
-        "1) Tap **Verify 🙂**\n"
-        "2) Complete steps\n"
-        "3) Return here automatically"
-    )
-
-    buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Verify 🙂", url=verify_url)],
-        [InlineKeyboardButton("How to verify ❓", url=HOW_TO_VERIFY_URL)],
-    ])
-
-    try:
-        await query.message.delete()
-    except Exception:
-        pass
-
-    await bot.send_message(user_id, caption, reply_markup=buttons, disable_web_page_preview=True)
+    await bot.send_message(user_id, caption, reply_markup=buttons)  
     await query.answer()
 
 @Bot.on_callback_query(filters.regex(r"^final_verify:(.+)$"))
 async def final_verify(bot, query):
     user_id = query.from_user.id
     token = query.data.split(":", 1)[1]
+    tok = tokens_collection.find_one({"_id": token})  
+    
+    if not tok or tok.get("used"): return await query.answer("Invalid Token.", show_alert=True)  
 
-    tok = tokens_collection.find_one({"_id": token})
-    if not tok or tok.get("user_id") != user_id or tok.get("used"):
-        return await query.answer("Verification failed.", show_alert=True)
-
-    tokens_collection.update_one(
-        {"_id": token},
-        {"$set": {"used": True, "used_at": datetime.utcnow()}}
-    )
-
-    code = get_current_code()
-    caption = f"🎁 Redeem Code:- `{code}`" if code else "❌ No codes available."
-
-    buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Generate Again", callback_data="gen_code")]
-    ])
-
-    try:
-        await query.message.delete()
-    except Exception:
-        pass
-
-    await bot.send_message(user_id, caption, reply_markup=buttons, disable_web_page_preview=True)
+    tokens_collection.update_one({"_id": token}, {"$set": {"used": True, "used_at": datetime.utcnow()}})  
+    code = get_current_code()  
+    caption = f"✅ Success!\n\n🎁 Redeem Code:- `{code}`" if code else "❌ No codes left."
+    
+    await bot.send_message(user_id, caption, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Generate Again", callback_data="gen_code")]]))  
     await query.answer("Verified ✅")
 
-# ───────────────── Health Check ───────────────── #
+# ───────────────── Admin & Health ─────────────────
+@Bot.on_message(filters.command("time") & filters.private)
+async def set_codes(bot, message):
+    if message.from_user.id not in ADMINS: return
+    parts = message.text.split()[1:]
+    if not parts: return await message.reply("Usage: /time CODE1 CODE2")
+    save_codes(parts)
+    await message.reply(f"✅ {len(parts)} codes set.")
+
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
-        self.send_header("Content-type", "text/plain")
         self.end_headers()
         self.wfile.write(b"Bot is Alive!")
 
 def run_server():
-    server = HTTPServer(("0.0.0.0", 8080), HealthCheckHandler)
-    server.serve_forever()
+    HTTPServer(("0.0.0.0", 8080), HealthCheckHandler).serve_forever()
 
-# ───────────────── Main ───────────────── #
 if __name__ == "__main__":
     threading.Thread(target=run_server, daemon=True).start()
     Bot.run()
